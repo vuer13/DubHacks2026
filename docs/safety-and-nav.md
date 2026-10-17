@@ -10,12 +10,13 @@ Before you start: read [`shared-context.md`](./shared-context.md) (or point your
 
 No agent needed. Do these by hand:
 
-1. Create accounts and get keys: OpenRouter (for Perception), xAI console (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can text it). Put keys in `backend/.env` and share them with the team over a private channel, never in git.
+1. Create accounts and get keys: Perceptron (for Perception; key at perceptron.inc, try the playground while you are there), ElevenLabs (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can text it). Put keys in `backend/.env` and `frontend/.env.local` and share them with the team over a private channel, never in git.
 2. Go record footage. Phone at chest height, landscape, 1080p 30 fps. Record these as separate clips, 60 to 90 s each, on the nearest trail with some variety (a park with stairs and a creek works if a real trail is far):
    - `clear.mp4`: easy clear trail, steady walking
    - `roots.mp4`: roots, steps, uneven ground
    - `edge.mp4`: a steep edge or drop-off on one side, walk along it
-   - `fork.mp4`: approach and pass a trail junction
+   - `fork.mp4`: approach and pass a trail junction, ideally one with a signpost; walk up close enough that the text is readable in the frame for a second or two
+   - `sign.mp4`: 10 s facing a trail sign or notice board, steady, then walk on (used for the sign-reading tool)
    - `people.mp4`: another person or dog passing
    - `stumble.mp4`: a stumble and recovery, keep walking (this must NOT trigger a fall)
    - `fall.mp4`: a staged fall onto grass, lie still for 10 s, then get up
@@ -74,7 +75,7 @@ Tests in backend/tests/test_trail.py: brief returns under 50 words for demo.gpx;
 
 ---
 
-## Step C3: fall detector, Mk1 confirmation, SOS
+## Step C3: fall detector, Mk1.5 confirmation, SOS
 
 **Prompt C3**
 
@@ -83,7 +84,7 @@ Read docs/shared-context.md. Implement fall detection and SOS.
 
 backend/safety/fall.py:
 - motion_signature(clip_path) -> {"motion_spike": bool, "static_after": bool, "peak_ratio": float}: with OpenCV, read the clip at 10 fps downscaled to 64x36 grayscale, compute mean absolute frame difference per frame. motion_spike is true if any frame's difference exceeds 4x the rolling mean of the previous 1 second. static_after is true if, after that spike, there is a window of at least 1.5 seconds where differences stay below 0.5x the pre-spike mean. Make 4x, 0.5x and 1.5 s constants.
-- async vlm_confirm(clip_path) -> ("yes"|"no"|"unsure", confidence): reuse backend/perception/mk1.py's HTTP client to ask Mk1 "This is a chest camera on a hiker. Did the wearer fall to the ground during this clip? Answer JSON only: {"fell": "yes"|"no"|"unsure", "confidence": 0 to 1, "reason": short string}". Import the client, do not duplicate the OpenRouter code.
+- async vlm_confirm(clip_path) -> ("yes"|"no"|"unsure", confidence): reuse backend/perception/mk1.py's get_client() to ask Mk1.5 with response_format json_schema (strict) for {"fell": "yes"|"no"|"unsure", "confidence": number 0 to 1, "reason": string}, reasoning_effort "high", and vision_config {"enable_audio_in_video": true} so the sound of an impact or a cry counts as evidence. Prompt: "This is a chest camera on a hiker, with sound. Did the wearer fall to the ground during this clip? A stumble with recovery is no. Consider both the picture and any impact or vocal sounds." Import the client, do not duplicate the API code. Check finish_reason == "stop" before parsing.
 - async assess(clip_path) -> FallAssessment with fields fell, confidence, signals. Decision: if motion_spike and static_after are both false, return "no" without calling the model (saves cost and latency). Otherwise call vlm_confirm. Final fell = "yes" only if at least two of {motion_spike, static_after, vlm == "yes"} are true; "unsure" if exactly one plus vlm "unsure"; else "no".
 
 backend/safety/sos.py:
@@ -94,7 +95,7 @@ Routes in backend/safety/router.py:
 - POST /api/fall/check (multipart clip + session_id) -> {"fell","confidence","signals"} and logs a fall_suspected event when fell is yes or unsure.
 - POST /api/sos and POST /api/sos/cancel per docs/shared-context.md.
 
-Tests in backend/tests/test_fall.py: run motion_signature on footage/stumble.mp4 (expect static_after false) and footage/fall.mp4 (expect both true), and assert assess on stumble.mp4 returns "no" without a model call (mock vlm_confirm and assert not called). Run tests on the real clips and show me the peak_ratio numbers for both so we can tune.
+Tests in backend/tests/test_fall.py: run motion_signature on footage/stumble.mp4 (expect static_after false) and footage/fall.mp4 (expect both true), and assert assess on stumble.mp4 returns "no" without a model call (mock vlm_confirm and assert not called). Run tests on the real clips and show me the peak_ratio numbers for both so we can tune. Also run vlm_confirm on fall.mp4 twice, once with audio enabled and once without, and report both confidences and latencies so we know whether audio earns its cost.
 ```
 
 **Done when**: `fall.mp4` assesses "yes", `stumble.mp4` assesses "no", and a test SMS arrives on the verified phone (send one real one now so you know the Twilio trial works; it prefixes "Sent from your Twilio trial account", which is fine).
@@ -124,7 +125,7 @@ Update tests, run everything, commit "session store and hazard map".
 
 ## Step C6: demo script and backup
 
-No agent. Write `demo/SCRIPT.md` using the outline in [`integration-and-demo.md`](./integration-and-demo.md), with exact timestamps in `hike1.mp4` where each moment happens (first warning, fork, drop-off, the question "what's ahead?", the stumble that does not fire, the fall). Set up a second phone or laptop with the share page open on the projector. Record a backup screen capture of a full clean run with App/Voice.
+No agent. Write `demo/SCRIPT.md` using the outline in [`integration-and-demo.md`](./integration-and-demo.md), with exact timestamps in `hike1.mp4` where each moment happens (first warning, fork and sign, drop-off, the question "what's ahead?", the stumble that does not fire, the fall). Perception's Step A7 produces `backend/data/jobs/hike1.clips.json` from a Mk1.5 clip-event pass over the whole video; use its timestamps as the starting point instead of scrubbing by hand, then confirm each one by eye. Set up a second phone or laptop with the share page open on the projector. Record a backup screen capture of a full clean run with App/Voice.
 
 ---
 
