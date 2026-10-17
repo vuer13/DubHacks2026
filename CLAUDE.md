@@ -1,0 +1,122 @@
+# TrailSense shared context
+
+Shared context for the whole team and any coding agent. Treat the schema and API contract as shared; change them only when the whole team agrees.
+
+## What we are building
+
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Short clips go to Perceptron Mk1, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. Grok Voice speaks short warnings and answers questions like "what's ahead?". A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
+
+The primary demo is a recorded trail video replayed with pre-computed events. Live camera mode exists but is secondary.
+
+## Non-negotiable principles
+
+- Short, direction-first speech. "Drop-off, left, stop." Never a paragraph during a warning.
+- Silence is a feature. Repeat nothing within 20 seconds unless it got closer.
+- A fall never triggers SOS without a voice check-in first.
+- Every model call returns JSON that validates against the schema below, or we discard it and log it.
+- Everything degrades gracefully. If a model call fails, the app keeps running and says nothing.
+
+## Hazard taxonomy
+
+`drop_off`, `steep_descent`, `water`, `loose_rock`, `roots_steps`, `low_branch`, `fork`, `mud_ice`, `wildlife`, `people`
+
+Severity: 1 = note it, 2 = caution, 3 = stop now.
+Direction: clock face, one of `"10"`, `"11"`, `"12"`, `"1"`, `"2"` (o'clock, relative to the hiker's facing direction).
+Distance: `"near"` (under 2 m), `"mid"` (2 to 6 m), `"far"` (over 6 m).
+
+## Event schema (frozen)
+
+Every perception result is a `ClipEvent`. The list of these for a video is `events.json`.
+
+```json
+{
+  "clip_id": "clip_0012",
+  "t_start": 36.0,
+  "t_end": 39.0,
+  "hazards": [
+    {
+      "type": "drop_off",
+      "severity": 3,
+      "direction": "11",
+      "distance": "near",
+      "say": "Drop-off, left, stop"
+    }
+  ],
+  "trail_state": "clear",
+  "surface": "packed dirt",
+  "scene": "Narrow dirt trail with a steep edge on the left, trees on the right.",
+  "model": "perceptron/perceptron-mk1",
+  "latency_ms": 1840
+}
+```
+
+Rules for `say`: maximum 6 words, direction word first when there is a hazard ("left", "right", "ahead"), imperative. `trail_state` is one of `clear`, `narrowing`, `fork`, `unclear`. `scene` is one sentence for on-demand description, never spoken automatically.
+
+The smoothing layer turns `ClipEvent`s into `SpeakEvent`s:
+
+```json
+{ "t": 36.4, "priority": 3, "say": "Drop-off, left, stop", "earcon": "stop", "haptic": "long" }
+```
+
+`priority` 3 pre-empts anything currently being spoken. `earcon` is one of `note`, `caution`, `stop`, `fork`, `sos`. `haptic` is one of `none`, `short`, `double`, `long`.
+
+## Safety events
+
+```json
+{ "type": "fall_suspected", "t": 212.0, "signals": {"motion_spike": true, "static_after": true, "vlm": "yes"}, "confidence": 0.86 }
+{ "type": "fall_checkin_started", "t": 213.0, "timeout_s": 20 }
+{ "type": "fall_cancelled", "t": 219.0, "by": "voice" }
+{ "type": "sos_sent", "t": 233.0, "to": "+1...", "lat": 49.3, "lng": -123.1 }
+{ "type": "off_trail", "t": 90.0, "distance_m": 22, "side": "left" }
+```
+
+## API contract (backend, FastAPI, port 8000)
+
+All JSON. CORS open during development.
+
+| Method | Path | Body or params | Returns | Owner |
+|---|---|---|---|---|
+| GET | `/health` | | `{"ok": true}` | A |
+| POST | `/api/analyze` | multipart `video` | `{"job_id": "..."}` | A |
+| GET | `/api/jobs/{job_id}` | | `{"status": "running\|done\|error", "events": [ClipEvent], "speak": [SpeakEvent]}` | A |
+| POST | `/api/clip` | multipart `clip` (3 s webm or mp4), `session_id` | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
+| POST | `/api/describe` | multipart `clip`, `session_id` | `{"scene": "...", "hazards": [...]}` | A |
+| GET | `/api/session/{session_id}/hazards` | | last 3 `ClipEvent`s, for Grok tools | A |
+| POST | `/api/location` | `{"session_id","lat","lng","ts"}` | `{"ok": true, "off_trail": null or {...}}` | C |
+| GET | `/api/location/{session_id}` | | `{"latest": {...}, "track": [...]}` | C |
+| GET | `/api/trail/{trail_id}/brief` | | `{"text": "This hike is 2.1 km..."}` | C |
+| POST | `/api/fall/check` | multipart `clip`, `session_id` | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
+| POST | `/api/sos` | `{"session_id","reason","lat","lng","recent_events":[...]}` | `{"sent": true, "to": "+1..."}` | C |
+| POST | `/api/sos/cancel` | `{"session_id"}` | `{"cancelled": true}` | C |
+
+Frontend routes (Next.js):
+
+| Path | What |
+|---|---|
+| `/` | Main hiker screen: video (file or camera), big status area, mic button |
+| `/share/[session_id]` | Live map pin and last events, for emergency contacts |
+| `/api/voice/token` | Server route that returns a short-lived xAI token for the browser WebSocket, or proxies if tokens are unavailable |
+
+## Grok voice tools (frontend declares, frontend executes by calling the backend)
+
+| Tool | Calls | Grok says |
+|---|---|---|
+| `get_hazards_ahead` | GET `/api/session/{id}/hazards` | Summarises the last events, direction first |
+| `describe_surroundings` | POST `/api/describe` with the latest clip | Reads `scene` |
+| `where_am_i` | GET `/api/location/{id}` + `/api/trail/{id}/brief` | Distance covered, off-trail status |
+| `start_sos` | POST `/api/sos` | Confirms help was contacted |
+| `cancel_sos` | POST `/api/sos/cancel` | Confirms cancellation |
+
+Grok system prompt (frontend owns it, keep it in `frontend/lib/voice/systemPrompt.ts`):
+
+> You are TrailSense, a calm hiking guide for a blind hiker. Speak in short sentences. When you receive a scene event, say only the `say` text, nothing else. When asked a question, answer in two sentences or fewer, directions first using clock positions. If the hiker says anything that sounds like distress, call start_sos. If a fall check-in is active and the hiker speaks at all, call cancel_sos. Never speculate about things you were not told.
+
+## Coding rules for all agents
+
+- Python: type hints, pydantic models for every schema above, `async` endpoints, `httpx` for API calls, log every model call with latency to `backend/data/logs/`.
+- TypeScript: strict mode, no `any`, Zod schemas mirroring the pydantic models in `frontend/lib/schema.ts`.
+- No databases. In-memory dicts keyed by `session_id`, persisted to JSON files under `backend/data/sessions/` on each write.
+- Every endpoint has a curl example in a docstring or a comment.
+- Write a tiny test or script that proves each step works before moving on. Keep them in `backend/tests/` and `frontend/scripts/`.
+- No em dashes in any user-facing text.
+- Never commit `.env` files or raw footage.
