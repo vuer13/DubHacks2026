@@ -9,7 +9,9 @@
 ## Mid-build handoffs
 
 - Perception gives App/Voice `backend/data/jobs/hike1.json` (events and, soon, speak).
-- Safety/Nav gives Perception the OpenRouter client to reuse for fall confirmation.
+- Perception gives Safety/Nav `get_client()` from `backend/perception/mk1.py` to reuse for fall confirmation.
+- App/Voice runs the speech pre-render script on the real job and commits the mp3s.
+- Everyone confirms the 2026-10-17 schema additions (`point`, `sign`, `/api/read_sign`, `read_sign` tool) at this sync.
 - App/Voice confirms `/api/jobs/hike1` loads in the app.
 
 ## Integration: the full run
@@ -17,9 +19,9 @@
 Run in this order. Everyone at one table, backend logs on one screen, the phone on another.
 
 1. Start the backend through ngrok, start the frontend, open on the phone.
-2. Tap mic, say "hello", Grok replies. Pre-brief plays.
-3. "Use demo hike", play. Watch for: earcons before speech, priority 3 interrupting, no repeated warnings, event log filling.
-4. Mid-hike, ask by voice: "what's ahead?", "describe what you see", "where am I?". Each should answer in two sentences or fewer.
+2. Tap mic, say "hello", the agent replies. Pre-brief plays from the pre-rendered file.
+3. "Use demo hike", play. Watch for: earcons before speech, priority 3 interrupting the agent mid-sentence, no repeated warnings, the sign readout after "Fork ahead", event log filling. Then turn on airplane mode and replay 30 seconds: warnings must still play.
+4. Mid-hike, ask by voice: "what's ahead?", "describe what you see", "read the sign", "where am I?". Each should answer in two sentences or fewer.
 5. Open the share page on a laptop; confirm the pin moves if you walk the phone around the room with geolocation on.
 6. Play `stumble.mp4`: nothing should fire. Play `fall.mp4`: check-in starts, countdown shows, stay silent, SMS arrives, share page shows the red banner. Replay `fall.mp4` and this time say "I'm fine" during the countdown: it cancels.
 7. Write down every failure in `demo/ISSUES.md` with an owner. Fix the top five before moving on. Anything else is cut or stubbed.
@@ -37,21 +39,21 @@ Three full runs of the demo script below, each timed. Between runs, only tune co
 | 0:00 | App/Voice | One sentence on the problem: blind and low-vision hikers depend on a sighted guide; we want to give them an independent one. |
 | 0:15 | App/Voice | Phone on the projector. Tap mic. Pre-brief plays. "This hike is 2.1 km..." |
 | 0:30 | App/Voice | Play hike1. First note-level warning ("Roots ahead"). Point at the event log. |
-| 0:50 | App/Voice | Fork: "Fork ahead", chime. Ask "which way?" and Grok answers from the trail brief. |
+| 0:50 | App/Voice | Fork: "Fork ahead", chime, then "Sign: Lynn Loop, right, two kilometres" read by OCR. Ask "which way?" and the agent answers from the sign and the trail brief. |
 | 1:15 | App/Voice | Drop-off moment: stop earcon, "Drop-off, left, stop", long vibration, cuts off any speech. |
-| 1:40 | App/Voice | Ask "describe what you see". Grok reads the scene. |
+| 1:40 | App/Voice | Ask "describe what you see". The agent reads the scene. |
 | 2:00 | Safety/Nav | Switch to stumble clip: show nothing fires. Say why: three signals, two required. |
 | 2:20 | Safety/Nav | Fall clip: check-in starts, countdown, silence, SMS lands on the second phone, share page goes red. |
 | 2:50 | Safety/Nav | Replay, answer "I'm fine", it cancels. |
-| 3:05 | Perception | What is real vs stubbed, latency numbers, cost per hour of hiking from the Mk1 logs, and the community hazard map vision. |
+| 3:05 | Perception | What is real vs stubbed, latency numbers, cost per hour of hiking from the Mk1.5 logs, how the point grounding fixes direction, and the community hazard map vision. |
 | 3:30 | all | Questions. |
 
 ## Pitch deck (7 slides, App/Voice builds)
 
 1. The problem, with a quote from a visually impaired hiker if you managed to talk to one, otherwise a stat on outdoor access.
 2. What TrailSense does, in three lines: sees, speaks, protects.
-3. Architecture: phone, FastAPI, Mk1, Grok, Twilio. One diagram.
-4. Perception: hazard taxonomy, the JSON schema, the smoothing rules.
+3. Architecture: phone, FastAPI, Mk1.5, ElevenLabs (two channels), Twilio. One diagram.
+4. Perception: hazard taxonomy, strict JSON schema, point grounding for direction, OCR for signs, the smoothing rules.
 5. Fall detection: the three-signal rule and the voice gate.
 6. Honest status: what runs live, what is replayed, measured latency and cost.
 7. Next: community hazard map, companion mode, any body camera as an input, SAR partnership.
@@ -60,6 +62,7 @@ Three full runs of the demo script below, each timed. Between runs, only tune co
 
 - "Is the detection real time?" Two to four seconds behind. It is a hazard-awareness aid that complements a cane or guide, not a replacement.
 - "How do you avoid false fall alarms?" Three signals, two required, and the hiker always gets 20 seconds to say they are fine.
-- "Why Mk1 and not a generic VLM?" Video input, structured output, and cost low enough to call every three seconds for a whole hike.
+- "Why Mk1.5 and not a generic VLM?" Video input, strict JSON and regex output, pointing on the same model so direction comes from geometry, OCR for signs, trained on first-person video, and cost low enough to call every three seconds for a whole hike.
+- "Why not have the voice agent say the warnings?" A warning must never wait on a language model or get paraphrased. Text to speech is verbatim and about 75 ms; the agent is for questions.
 - "What about offline?" Not in the first version. The fall check-in and SOS path is the first thing to move on-device.
 - "Did you test with actual users?" Answer honestly. If you did not, say what you would test first and with whom.

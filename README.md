@@ -1,6 +1,6 @@
 # TrailSense
 
-A hiking assistant for visually impaired hikers: phone camera in, Perceptron Mk1 hazards out, Grok Voice warnings, plus GPS share / fall check-in / SOS.
+A hiking assistant for visually impaired hikers: phone camera in, Perceptron Mk1.5 hazards and trail signs out, ElevenLabs voice warnings and questions, plus GPS share / fall check-in / SOS.
 
 ## Docs
 
@@ -8,7 +8,8 @@ Start here: [`docs/README.md`](./docs/README.md)
 
 | Doc | For |
 |---|---|
-| [Build plan](./docs/build-plan.md) | Everyone — stack, lanes, build order |
+| [Build plan](./docs/build-plan.md) | Everyone: stack, lanes, build order, changelog |
+| [Vendor APIs](./docs/vendor-apis.md) | Perceptron Mk1.5 and ElevenLabs facts |
 | [Shared context](./docs/shared-context.md) | Schema + API for the team (and any agent) |
 | [Perception](./docs/perception.md) | Vision backend |
 | [App and voice](./docs/app-and-voice.md) | Frontend + voice |
