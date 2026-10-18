@@ -1,7 +1,6 @@
 import { HealthResponseSchema } from "@/lib/schema";
 
-const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
 export async function checkBackendHealth(): Promise<boolean> {
   try {

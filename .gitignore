@@ -165,6 +165,10 @@ venv.bak/
 node_modules/
 .next/
 out/
+/frontend/.expo/
+/frontend/dist/
+/frontend/web-build/
+*.tsbuildinfo
 
 # TrailSense local data and raw footage
 footage/

@@ -1,6 +1,6 @@
 # TrailSense design handoff
 
-TrailSense is a Next.js mobile web app for blind and low-vision hikers. The hiker listens; the screen exists for arm's-length glances, sighted teammates and judges. This page is the developer contract for the design in `source/project/` and `png/`: tokens, components, the data that drives every frame, and the glyph SVGs.
+TrailSense is an Expo/React Native mobile app for blind and low-vision hikers. The hiker listens; the screen exists for arm's-length glances, sighted teammates and judges. This page is the developer contract for the design in `source/project/` and `png/`: tokens, components, the data that drives every frame, and the glyph SVGs.
 
 Contents
 
@@ -250,11 +250,11 @@ Fork, take the right branch (LV7). Stem 24px, the branch not taken 12px, the bra
 </svg>
 ```
 
-Small 24-unit icons used in swatches and buttons (stroke 2.4, round caps and joins, `currentColor`): check `M5 12l5 5L20 7`; caution triangle `M12 3L22 20H2z M12 10v4 M12 17.5h.01`; stop octagon `M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9z M12 8v5 M12 16.5h.01`; fork `M12 21v-8 M12 13L6 6 M12 13l6-7`; mic `rect 9,3 6x11 rx3; M5 11a7 7 0 0 0 14 0; M12 18v3`; waveform `M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 10v4`; alert circle `circle 12,12 r9; M12 7v6; M12 16.5h.01`. The same files are in `frontend/public/glyphs/` (`arrow-ahead.svg`, `arrow-steer-right.svg`, `stop.svg`, `fork-right.svg`), served at `/glyphs/<name>.svg`.
+Small 24-unit icons used in swatches and buttons (stroke 2.4, round caps and joins, `currentColor`): check `M5 12l5 5L20 7`; caution triangle `M12 3L22 20H2z M12 10v4 M12 17.5h.01`; stop octagon `M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9z M12 8v5 M12 16.5h.01`; fork `M12 21v-8 M12 13L6 6 M12 13l6-7`; mic `rect 9,3 6x11 rx3; M5 11a7 7 0 0 0 14 0; M12 18v3`; waveform `M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 10v4`; alert circle `circle 12,12 r9; M12 7v6; M12 16.5h.01`. Legacy SVG glyph files are archived in `frontend/legacy-web/public/glyphs/`; port them to native vector/icon components when implementing low-vision guidance.
 
 ## 5. Accessibility rules
 
-Every control is a native button, switch or link with an aria-label that says what it does and, for toggles, its current state. The last spoken line lives in a single region marked aria-live assertive and aria-atomic so a new warning interrupts whatever VoiceOver was reading; everything else is polite or silent. Colour is never the only signal: each severity carries an icon and its name in words, each health dot sits beside a status sentence, the fork blue always travels with the fork glyph, and in low-vision mode the arrow's stroke weight carries the severity. Focus rings are a 3px off-white outline with 3px offset. Motion is limited to one slow pulse on the listening mic, the blink of the Analysing dot, the map pin halo and the countdown arc, and all of them stop under prefers-reduced-motion. Nothing on the hiker screen is under 18px, nothing tappable is under 64px, low-vision text is 64px, and all type scales with the system text size.
+Every control is a native button, switch or link with `accessibilityLabel` and the current toggle state. Announce urgent warnings through a native accessibility live region; keep other content polite or silent. Colour is never the only signal: each severity carries an icon and its name in words, each health dot sits beside a status sentence, the fork blue always travels with the fork glyph, and in low-vision mode the arrow's stroke weight carries the severity. Motion is limited to one slow pulse on the listening mic, the blink of the Analysing dot, the map pin halo and the countdown arc, and all of them stop when reduced motion is requested. Nothing on the hiker screen is under 18px, nothing tappable is under 64px, low-vision text is 64px, and all type scales with the system text size.
 
 ## 6. Files in this package
 
@@ -262,7 +262,7 @@ Every control is a native button, switch or link with an aria-label that says wh
 source/project/canvas.json          canvas index: frame positions, titles, annotation stickies
 source/project/*.dc.html            one self-contained HTML file per frame (inline styles, inline SVG)
 png/*.png                           2x renders of every frame, named by state (phone 780 by 1688, laptop 2560 by 1600); the design system sheet is downscaled to 1920 wide, 64 colours, to stay under 500 KB
-frontend/public/glyphs/*.svg        the four low-vision glyphs as standalone SVG (repo path, moved out of this folder)
+frontend/legacy-web/public/glyphs/*.svg  the archived web versions of four low-vision glyphs
 handoff.md                          this page
 ```
 

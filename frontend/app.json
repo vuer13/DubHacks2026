@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "TrailSense",
+    "slug": "trailsense",
+    "version": "0.1.0",
+    "scheme": "trailsense",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TrailSense uses the camera to preview the trail and detect hazards.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "TrailSense uses selected trail clips for fall testing."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "edgeToEdgeEnabled": true
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
