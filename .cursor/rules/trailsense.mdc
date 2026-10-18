@@ -9,7 +9,7 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Short clips go to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
 
 The primary demo is a recorded trail video replayed with pre-computed events and pre-rendered speech. Live camera mode exists but is secondary.
 
@@ -60,6 +60,8 @@ Every perception result is a `ClipEvent`. The list of these for a video is `even
 }
 ```
 
+`t_start` and `t_end` are the bounds of the context window the model saw, in seconds from session or video start. Windows overlap (default 6 s window, 3 s stride), so consecutive events share frames. `clip_id` names the window.
+
 Rules for `say`: maximum 6 words, direction word first when there is a hazard ("left", "right", "ahead"), imperative. `trail_state` is one of `clear`, `narrowing`, `fork`, `unclear`. `scene` is one sentence for on-demand description, never spoken automatically.
 
 Optional fields (added 2026-10-17, default `null`, older events without them still validate):
@@ -105,7 +107,7 @@ All JSON. CORS open during development.
 | GET | `/health` | | `{"ok": true}` | A |
 | POST | `/api/analyze` | multipart `video` | `{"job_id": "..."}` | A |
 | GET | `/api/jobs/{job_id}` | | `{"status": "running\|done\|error", "events": [ClipEvent], "speak": [SpeakEvent]}` | A |
-| POST | `/api/clip` | multipart `clip` (3 s webm or mp4), `session_id` | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
+| POST | `/api/clip` | multipart `clip` (the latest 3 s webm or mp4 chunk), `session_id`. The backend adds the chunk's frames to the session's running window and analyses the whole window | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
 | POST | `/api/describe` | multipart `clip`, `session_id` | `{"scene": "...", "hazards": [...]}` | A |
 | POST | `/api/read_sign` | multipart `frame` (jpeg) or `clip`, `session_id` | `{"sign": SignReading}` | A |
 | GET | `/api/session/{session_id}/hazards` | | last 3 `ClipEvent`s, for voice tools | A |
@@ -157,14 +159,25 @@ Model `perceptron-mk1.5` on `https://api.perceptron.inc/v1/chat/completions` (`p
 
 | Need | Mk1.5 feature | Request shape |
 |---|---|---|
-| Hazard JSON per 3 s clip | Structured output | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
+| Hazard JSON every 3 s, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
 | Direction and distance from geometry | Pointing | second request, `vision_config={"annotation_format":"point"}`, only for severity 2 and 3 |
 | Confirm a severity 3 | Regex output | `regex="yes\|no"` |
 | Trail signs, junction posts, warning signs | OCR + structured output | `response_format` json_schema for `SignReading`, `reasoning_effort="high"` |
 | Scene description on demand | Plain text | `reasoning_effort="high"`, two sentences |
-| Fall confirmation | Structured output + audio | json_schema, `vision_config={"enable_audio_in_video": true}` so a thud or a cry counts |
-| Demo script timestamps and recall check | Clip events | `vision_config={"annotation_format":"clip"}` on the whole hike video, offline |
-| Low-vision guidance arrow (stretch) | Video tracking | `vision_config={"annotation_format":"box"}`, "track the walkable trail", offline, produces `track.json` |
+| Fall confirmation | Structured output + audio | json_schema, `vision_config={"enable_audio_in_video": true}` so a thud or a cry counts. Sends the real clip, not frames, because audio needs it |
+| Demo script timestamps and recall check | Clip events | `vision_config={"annotation_format":"clip"}`, offline batch: contact sheets to find candidate segments, then `video_frames` at 1 fps with source timestamps |
+| Low-vision guidance arrow (stretch) | Video tracking | `vision_config={"annotation_format":"box"}`, "track the walkable trail", offline batch of `video_frames` at 2 fps, produces `track.json` |
+
+### How we pass video to the model
+
+Guidance from Perceptron: "For passing data to the model, if you're trying to do continuous monitoring, I'd pass in a running context window of a few seconds. If batching, I'd pass in frames or a contact sheet."
+
+| Mode | Where | What we send |
+|---|---|---|
+| Continuous monitoring | Live `/api/clip`, and the offline replay pipeline (it simulates live so replay matches what live would say) | A running window. The backend samples frames at `FRAME_FPS` (default 2, 480p) into a per-session ring buffer. Every `STRIDE_S` (default 3 s) it sends the last `WINDOW_S` (default 6 s, about 12 frames) as one `video_frames` asset with real timestamps. The model sees what led up to now, so it can tell an approaching edge from a passing shadow |
+| Batching | Whole-video offline jobs: clip-event ground truth, trail tracking, demo-script timestamps | Frames or a contact sheet. `video_frames` at 1 to 2 fps with source-video timestamps when exact times matter, in segments that fit 256 media units and the token budget. A contact sheet is one grid image of thumbnails with the timestamp burned into each tile. It costs one media unit, so use it for a cheap first scan that picks which segments get the frame pass |
+| Single frame | Grounding, sign reading, severity 3 confirmation | The latest frame of the window as one image |
+| Real clip | Fall confirmation | `video()` of the posted chunk, because `enable_audio_in_video` needs a real video asset |
 
 Rules: one output constraint per request (json_schema, regex, or an annotation format; never two). Tools cannot be combined with json_schema or regex. Check `finish_reason == "stop"` before parsing. Coordinates are on a 0 to 1000 grid, origin top-left.
 

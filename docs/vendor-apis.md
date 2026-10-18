@@ -9,7 +9,7 @@ Facts gathered 2026-10-17 from the Perceptron workshop (DubHacks), the Mk1.5 lau
 - Model ID: `perceptron-mk1.5`. Endpoint: `POST https://api.perceptron.inc/v1/chat/completions`, Bearer `PERCEPTRON_API_KEY`. OpenAI-style chat completions.
 - Python: `pip install "perceptron>=0.4.0"`, then `from perceptron import Client, image, video, audio, video_frames`. `Client(api_key=...)`, `client.chat.completions.create(model="perceptron-mk1.5", messages=[...], ...)`.
 - `image()`, `video()`, `audio()` accept a local path, bytes, a URL, or an uploaded file ID (Files API, upload once and reuse).
-- `video_frames([(image, timestamp_ms), ...])` sends preselected frames as one asset. At least two frames, same dimensions, ascending integer timestamps. Use this if whole-clip upload is slow: 6 frames from a 3 s clip at 480p is a good first try.
+- `video_frames([(image, timestamp_ms), ...])` sends preselected frames as one asset. At least two frames, same dimensions, ascending integer timestamps. Timestamps are kept as given, not rebased, so pass source-video or session timestamps and the answers come back in that clock. This is our default way to send video; see "Passing video" below.
 - OpenRouter slug: `perceptron/perceptron-mk1.5`. OpenRouter is a plain chat completions proxy; whether it forwards `vision_config`, `response_format` json_schema, and `regex` is unverified. Treat it as a fallback for plain prompting only.
 - Mk1 (`perceptron-mk1`) still exists. Hosted Isaac models (`isaac-0.1`, `isaac-0.2-1b`, `isaac-0.2-2b-preview`) were retired on 2026-09-25 and now return 404 `model_not_found`. Isaac 0.5 mentioned in the workshop Q&A is a robot action model for teleop data; not relevant to us.
 
@@ -17,7 +17,7 @@ Facts gathered 2026-10-17 from the Perceptron workshop (DubHacks), the Mk1.5 lau
 
 | Parameter | Values | Our use |
 |---|---|---|
-| `reasoning_effort` | `high` (default, slowest), `medium`, `low`, `minimal`, `none` | `low` or `minimal` for 3 s hazard clips, `high` for describe, OCR, fall confirm. Replaces Mk1's `vision_config.enable_thinking` |
+| `reasoning_effort` | `high` (default, slowest), `medium`, `low`, `minimal`, `none` | `low` or `minimal` for running-window hazard calls, `high` for describe, OCR, fall confirm. Replaces Mk1's `vision_config.enable_thinking` |
 | `max_completion_tokens` | int, max 8,192 | 512 for hazard JSON, 2048 for describe and OCR, 4096 for tracking |
 | `response_format` | `{"type":"json_schema","json_schema":{"name":..., "strict": true, "schema": {...}}}` | Hazard JSON, sign JSON, fall JSON. Build the schema with pydantic `model_json_schema()` and validate with `model_validate_json(..., strict=True)` |
 | `regex` | top-level string, e.g. `"yes|no"` | Severity 3 confirmation |
@@ -28,7 +28,15 @@ Facts gathered 2026-10-17 from the Perceptron workshop (DubHacks), the Mk1.5 lau
 
 Rules: one output constraint per request. Check `finish_reason == "stop"` before parsing; `"length"` means the budget ran out. Context window 36,864 tokens, so video, prompt, and output must fit together. Audio is about 750 tokens per minute, 16,384 tokens per item. 256 media units per request.
 
-Pricing: $0.15 per million input tokens, $1.50 per million output, $0.0375 per million cached input. Speed from the launch post (single H100, median): image question 0.51 s, 60 s video 9.1 s. Our 3 s clips should land well under that; measure in Step A1.
+Pricing: $0.15 per million input tokens, $1.50 per million output, $0.0375 per million cached input. Speed from the launch post (single H100, median): image question 0.51 s, 60 s video 9.1 s. Our 6 s windows of about 12 frames should land well under that; measure in Step A1, including tokens per frame from the usage field.
+
+### Passing video: continuous vs batch
+
+Guidance from Perceptron: "For passing data to the model, if you're trying to do continuous monitoring, I'd pass in a running context window of a few seconds. If batching, I'd pass in frames or a contact sheet."
+
+- **Continuous monitoring (live and replay hazards).** Keep a ring buffer of frames per session and send the last few seconds on every tick. Defaults: 2 fps, 480p, 6 s window, 3 s stride, so each frame is sent about twice. Tune in Step A1 against latency and tokens per frame. Do not send disconnected 3 s clips; the model loses the motion that shows a hazard getting closer.
+- **Batching (whole-video jobs).** Send `video_frames` with source timestamps at 1 to 2 fps when you need exact times, in segments under 256 media units and the 36,864 token context. For a cheap first scan, send a contact sheet: one image, a grid of thumbnails (for example 4 x 4 at one frame per 2 s, so 32 s per sheet) with each tile's timestamp burned into its corner. The model cannot know tile times on its own, so ask it to answer with tile labels and map them back in code. Then send frames only for the segments the sheet flags.
+- **Audio is the exception.** `enable_audio_in_video` only applies to a real video asset. Frames and contact sheets carry no sound, so fall confirmation and the audio experiment send `video()` clips.
 
 ### Output formats
 
@@ -59,8 +67,8 @@ Structured JSON lands in `message.content` as a string. Annotations also land in
 | Grounding: points, boxes, polygons | Spatial answer on the frame | Direction and distance from the hazard's point; people and wildlife boxes |
 | Object counting, multiple detections in one call | "How many X? Point to each." | Count people or dogs ahead for the `people` hazard say text |
 | OCR | Read labels, signage | Trail signs, junction posts, warning signs, distance markers |
-| Video clip events | "Clip the exact moment X" | Offline: find the fall, the fork, the drop-off in `hike1.mp4` for the demo script and as ground truth for `events.json` recall |
-| Video tracking | Timestamped geometry across frames | Offline: track the walkable trail for a guidance arrow (stretch) |
+| Video clip events | "Clip the exact moment X" | Offline batch: contact sheets find candidate segments in `hike1.mp4`, then `video_frames` at 1 fps give exact times for the demo script and ground truth for `events.json` recall |
+| Video tracking | Timestamped geometry across frames | Offline batch of `video_frames` at 2 fps: track the walkable trail for a guidance arrow (stretch) |
 | Audio in video | Transcription and environmental sound | Fall confirm hears the impact; water and wildlife get a second signal |
 | In-context examples | Pass an image of the thing to find | Stretch: pass a reference photo of a trail marker blaze and ask the model to find the same marker |
 | Tool calls (web search, zoom) | Function calling; you implement the tools | Stretch: after OCR reads a trailhead sign, look the trail up and summarise. Web search is not hosted; we would need our own search API |

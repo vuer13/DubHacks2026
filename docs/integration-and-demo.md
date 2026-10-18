@@ -63,6 +63,7 @@ Three full runs of the demo script below, each timed. Between runs, only tune co
 - "Is the detection real time?" Two to four seconds behind. It is a hazard-awareness aid that complements a cane or guide, not a replacement.
 - "How do you avoid false fall alarms?" Three signals, two required, and the hiker always gets 20 seconds to say they are fine.
 - "Why Mk1.5 and not a generic VLM?" Video input, strict JSON and regex output, pointing on the same model so direction comes from geometry, OCR for signs, trained on first-person video, and cost low enough to call every three seconds for a whole hike.
+- "Why not analyse single frames?" Each call sees the last six seconds as a running window, so the model can tell an edge it is walking toward from one it is walking past. Offline jobs over the whole hike use frames or contact sheets instead, which is cheaper when nothing is live.
 - "Why not have the voice agent say the warnings?" A warning must never wait on a language model or get paraphrased. Text to speech is verbatim and about 75 ms; the agent is for questions.
 - "What about offline?" Not in the first version. The fall check-in and SOS path is the first thing to move on-device.
 - "Did you test with actual users?" Answer honestly. If you did not, say what you would test first and with whom.

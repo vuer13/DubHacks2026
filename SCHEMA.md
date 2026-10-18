@@ -39,6 +39,7 @@ Source of truth: [`docs/shared-context.md`](./docs/shared-context.md). Change on
 }
 ```
 
+- `t_start` / `t_end`: bounds of the context window the model saw; windows overlap (6 s window, 3 s stride by default)
 - `say`: max 6 words, direction word first, imperative
 - `trail_state`: `clear` | `narrowing` | `fork` | `unclear`
 - `scene`: one sentence; never spoken automatically
