@@ -104,14 +104,14 @@ All JSON. CORS open during development.
 | GET | `/health` | | `{"ok": true}` | A |
 | POST | `/api/analyze` | multipart `video` | `{"job_id": "..."}` | A |
 | GET | `/api/jobs/{job_id}` | | `{"status": "running\|done\|error", "events": [ClipEvent], "speak": [SpeakEvent]}` | A |
-| POST | `/api/clip` | multipart `clip` (short webm or mp4 segment), `session_id`; optional `sequence` for ordered three-second live segments. The backend adds frames to the session's running window | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
+| POST | `/api/clip` | multipart `clip` (short webm or mp4 segment), `session_id`; optional `sequence` for ordered one-second live segments. The backend adds frames to the session's running window | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
 | POST | `/api/describe` | multipart `clip`, `session_id` | `{"scene": "...", "hazards": [...]}` | A |
 | POST | `/api/read_sign` | multipart `frame` (jpeg) or `clip`, `session_id` | `{"sign": SignReading}` | A |
 | GET | `/api/session/{session_id}/hazards` | | last 3 `ClipEvent`s, for voice tools | A |
 | POST | `/api/location` | `{"session_id","lat","lng","ts"}` | `{"ok": true, "off_trail": null or {...}}` | C |
 | GET | `/api/location/{session_id}` | | `{"latest": {...}, "track": [...]}` | C |
 | GET | `/api/trail/{trail_id}/brief` | | `{"text": "This hike is 2.1 km..."}` | C |
-| POST | `/api/fall/check` | multipart `clip`, `session_id`; optional `windowed=true`, `sequence` for three-second rolling segments. The backend assesses a nine-second window, advancing by three seconds per request after warm-up | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
+| POST | `/api/fall/check` | multipart `clip`, `session_id`; optional `windowed=true`, `sequence` for one-second rolling segments. The backend assesses a four-second window every three segments, retaining one second of overlap | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
 | POST | `/api/sos` | `{"session_id","reason","lat","lng","recent_events":[...]}` | `{"sent": true, "to": "+1..."}` | C |
 | POST | `/api/sos/cancel` | `{"session_id"}` | `{"cancelled": true}` | C |
 | GET | `/api/voice/token` | | `{"conversation_token": "..."}`. Calls ElevenLabs `GET /v1/convai/conversation/token?agent_id=...` with the server-side key; the app passes the token to the agent SDK (WebRTC). **Proposed 2026-10-18** | B |

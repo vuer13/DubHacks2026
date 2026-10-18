@@ -92,10 +92,10 @@ backend/safety/sos.py:
 - cancel_sos(session_id): marks a pending SOS cancelled in memory and logs a fall_cancelled event.
 
 Routes in backend/safety/router.py:
-- POST /api/fall/check (multipart clip + session_id) -> {"fell","confidence"}; supports sequential three-second segments that are assembled into overlapping nine-second windows, advancing every three seconds, and logs a fall_suspected event after a full window when fell is yes or unsure.
+- POST /api/fall/check (multipart clip + session_id) -> {"fell","confidence"}; buffers sequential one-second segments and assesses four-second windows every three segments, with one second of overlap. If the model is still busy, the client drops stale queued clips, causing the backend to refill its window after a sequence gap.
 - POST /api/sos and POST /api/sos/cancel per docs/shared-context.md.
 
-**Live latency note:** One nine-second fall request took 37,302 ms at high reasoning effort. Fall confirmation now uses medium effort, but this is not a latency guarantee. The camera records a three-second clip every three seconds; calls slower than that can build a backlog and make results stale. Measure the new latency before relying on live fall alerts.
+**Live latency note:** One nine-second fall request took 37,302 ms at high reasoning effort. Fall confirmation now uses medium effort, but this is not a latency guarantee. The camera records every second and the model is scheduled every three seconds; calls slower than that can cause clips to be dropped and the window to refill. Measure the new latency before relying on live fall alerts.
 
 Tests in backend/tests/test_fall.py: cover optical-flow features on synthetic rotating and vertically sweeping clips, model-first behavior, and OpenCV fallback when Mk1.5 is inconclusive or unavailable. To train an SVM or Random Forest later, collect labeled fall and non-fall clips and export the per-clip features; no classifier is trained until those labels are available.
 ```

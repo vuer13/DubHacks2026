@@ -38,7 +38,7 @@ from ..models import (
 from .mk1 import get_client, get_model_name
 
 WINDOW_SECONDS = 6.0
-LIVE_SEGMENT_SECONDS = 3.0
+LIVE_SEGMENT_SECONDS = 1.0
 FRAME_INTERVAL_SECONDS = 0.5
 FRAME_LONG_EDGE = 480
 MAX_SESSION_COUNT = 64
@@ -382,7 +382,7 @@ async def analyze_live_clip(
             window.frames.clear()
             window.last_spoken.clear()
         window.last_sequence = sequence
-        # Live camera uploads are three-second segments, numbered in capture order.
+        # Live camera uploads are one-second segments, numbered in capture order.
         clip_start_ms = round(sequence * LIVE_SEGMENT_SECONDS * 1000)
     else:
         if not window.frames:

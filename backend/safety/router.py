@@ -28,7 +28,14 @@ from ..models import (
     SosResponse,
     TrailSenseModel,
 )
-from .fall import FallAssessment, FallSignals, assemble_fall_window, assess
+from .fall import (
+    FALL_CHECK_STRIDE_SEGMENTS,
+    FALL_WINDOW_SEGMENTS,
+    FallAssessment,
+    FallSignals,
+    assemble_fall_window,
+    assess,
+)
 from .sos import cancel_sos as cancel_sos_for_session
 from .sos import call_sos as deliver_sos
 
@@ -43,8 +50,11 @@ FALL_WINDOW_TTL_SECONDS = 30 * 60
 
 @dataclass
 class FallClipWindow:
-    segments: deque[tuple[bytes, str]] = field(default_factory=lambda: deque(maxlen=3))
+    segments: deque[tuple[bytes, str]] = field(
+        default_factory=lambda: deque(maxlen=FALL_WINDOW_SEGMENTS)
+    )
     last_sequence: int = -1
+    next_assessment_sequence: int | None = None
     last_used_at: float = field(default_factory=time.monotonic)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -178,15 +188,16 @@ async def check_for_fall(
     windowed: bool = Form(False),
     sequence: int | None = Form(None, ge=0),
 ) -> FallCheckResponse:
-    """Assess a clip or append a three-second segment to a rolling fall window.
+    """Assess a clip or append a one-second segment to a rolling fall window.
 
     Example:
         curl -F 'clip=@fall.webm' -F 'session_id=demo' \\
           http://localhost:8000/api/fall/check
 
-    Sliding-window clients upload three-second clips with the same session ID,
-    ``windowed=true``, and a zero-based sequence. After the first three clips,
-    each request assesses a nine-second window and advances it by three seconds.
+    Sliding-window clients upload one-second clips with the same session ID,
+    ``windowed=true``, and a zero-based sequence. The backend assesses the first
+    four clips, then advances each four-second window by three clips, keeping a
+    one-second overlap. Intervening clips are buffered without a model call.
 
     Example:
         curl -F 'clip=@segment_0.mp4' -F 'session_id=demo' \\
@@ -209,10 +220,19 @@ async def check_for_fall(
             async with window.lock:
                 if sequence != window.last_sequence + 1:
                     window.segments.clear()
+                    window.next_assessment_sequence = (
+                        sequence + FALL_WINDOW_SEGMENTS - 1
+                    )
+                elif window.next_assessment_sequence is None:
+                    window.next_assessment_sequence = (
+                        sequence + FALL_WINDOW_SEGMENTS - 1
+                    )
                 window.segments.append((clip_bytes, clip.filename or "camera.mp4"))
                 window.last_sequence = sequence
                 window.last_used_at = time.monotonic()
-                if len(window.segments) < 3:
+                if len(window.segments) < FALL_WINDOW_SEGMENTS:
+                    return FallCheckResponse(fell="unsure", confidence=0.0)
+                if sequence < window.next_assessment_sequence:
                     return FallCheckResponse(fell="unsure", confidence=0.0)
 
                 try:
@@ -225,6 +245,9 @@ async def check_for_fall(
                     assessment = await assess(
                         temp_path,
                         video_segments=[segment for segment, _ in window.segments],
+                    )
+                    window.next_assessment_sequence = (
+                        sequence + FALL_CHECK_STRIDE_SEGMENTS
                     )
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc

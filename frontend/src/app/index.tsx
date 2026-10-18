@@ -19,7 +19,10 @@ import { createSessionId } from "@/lib/session";
 import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
 
 const CHECKIN_SECONDS = 20;
-const SEGMENT_SECONDS = 3;
+const SEGMENT_SECONDS = 1;
+const FALL_WINDOW_SEGMENTS = 4;
+const FALL_CHECK_STRIDE_SEGMENTS = 3;
+const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 
 type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
 
@@ -29,6 +32,7 @@ export default function HikerScreen() {
   const processingRef = useRef(false);
   const pendingClipsRef = useRef<PendingClip[]>([]);
   const clipSequenceRef = useRef(0);
+  const nextFallAssessmentSequenceRef = useRef(FALL_WINDOW_SEGMENTS - 1);
   const generationRef = useRef(0);
   const monitoringRef = useRef(false);
   const checkinTriggeredRef = useRef(false);
@@ -82,15 +86,33 @@ export default function HikerScreen() {
     if (!camera) return;
 
     const uploadClip = (uri: string) => {
+      const generation = generationRef.current;
+      const obsolete = pendingClipsRef.current.filter((clip) => clip.generation !== generation);
+      pendingClipsRef.current = pendingClipsRef.current.filter((clip) => clip.generation === generation);
+      obsolete.forEach((clip) => deleteRecordedClip(clip.uri));
+
       pendingClipsRef.current.push({
         uri,
-        generation: generationRef.current,
+        generation,
         fallOnly: fallOnlyMode,
         sequence: clipSequenceRef.current++,
       });
+      if (pendingClipsRef.current.length > MAX_PENDING_CLIPS) {
+        const dropped = pendingClipsRef.current.splice(
+          0,
+          pendingClipsRef.current.length - MAX_PENDING_CLIPS,
+        );
+        dropped.forEach((clip) => deleteRecordedClip(clip.uri));
+        const firstPending = pendingClipsRef.current[0];
+        if (firstPending) {
+          nextFallAssessmentSequenceRef.current =
+            firstPending.sequence + FALL_WINDOW_SEGMENTS - 1;
+        }
+        setFallCheckStatus("Analysis fell behind; skipped stale clips and refilling the 4-second window");
+      }
       if (pendingClipsRef.current.length > 0) {
         setCaptureStatus(
-            `${pendingClipsRef.current.length} three-second clip${pendingClipsRef.current.length === 1 ? "" : "s"} waiting for analysis`,
+          `${pendingClipsRef.current.length} one-second clip${pendingClipsRef.current.length === 1 ? "" : "s"} waiting for analysis`,
         );
       }
       if (processingRef.current) return;
@@ -107,11 +129,23 @@ export default function HikerScreen() {
             continue;
           }
 
-          setFallCheckStatus(
-            current.sequence < 2
-              ? `Filling the 9-second window (${current.sequence + 1}/3 clips)…`
-              : `Assessing the latest sliding 9-second window…`,
+          const fallAssessmentDue =
+            current.sequence >= nextFallAssessmentSequenceRef.current;
+          const windowStartSequence =
+            nextFallAssessmentSequenceRef.current - FALL_WINDOW_SEGMENTS + 1;
+          const clipsInWindow = Math.min(
+            FALL_WINDOW_SEGMENTS,
+            Math.max(0, current.sequence - windowStartSequence + 1),
           );
+          if (!fallAssessmentDue) {
+            setFallCheckStatus(
+              clipsInWindow < FALL_WINDOW_SEGMENTS
+                ? `Filling the 4-second window (${clipsInWindow}/${FALL_WINDOW_SEGMENTS} clips)…`
+                : `Collecting the next window; checking again in ${nextFallAssessmentSequenceRef.current - current.sequence} clip(s)…`,
+            );
+          } else {
+            setFallCheckStatus("Assessing the latest sliding 4-second window…");
+          }
           let trailResult: PromiseSettledResult<ClipResponse> | null = null;
           let fallCheck: PromiseSettledResult<FallCheckResponse>;
           if (current.fallOnly) {
@@ -142,12 +176,22 @@ export default function HikerScreen() {
             setCaptureStatus("Camera is recording; backend analysis is unavailable");
           }
           if (isCurrent && fallCheck.status === "fulfilled") {
-            if (current.sequence >= 2) setFallResult(fallCheck.value);
-            setFallCheckStatus(
-              current.sequence < 2
-                ? `Waiting for clip ${current.sequence + 2}/3 to complete the first 9-second window`
-                : "Latest sliding window assessed",
-            );
+            if (fallAssessmentDue) {
+              setFallResult(fallCheck.value);
+              if (current.sequence >= nextFallAssessmentSequenceRef.current) {
+                nextFallAssessmentSequenceRef.current = Math.max(
+                  nextFallAssessmentSequenceRef.current,
+                  current.sequence + FALL_CHECK_STRIDE_SEGMENTS,
+                );
+              }
+              setFallCheckStatus("Latest sliding 4-second window assessed");
+            } else {
+              const remaining = Math.max(
+                1,
+                nextFallAssessmentSequenceRef.current - current.sequence,
+              );
+              setFallCheckStatus(`Collecting clips; next fall assessment in ${remaining} second(s)`);
+            }
             if (fallCheck.value.fell === "yes" && !checkinTriggeredRef.current) {
               startCheckinPreview();
             }
@@ -160,8 +204,8 @@ export default function HikerScreen() {
             const queued = pendingClipsRef.current.length;
             setCaptureStatus(
               queued === 0
-              ? "Recording three-second clips for sliding windows"
-              : `${queued} three-second clip${queued === 1 ? "" : "s"} queued for analysis`,
+              ? "Recording one-second clips for sliding windows"
+              : `${queued} one-second clip${queued === 1 ? "" : "s"} queued for analysis`,
             );
           }
         }
@@ -174,7 +218,7 @@ export default function HikerScreen() {
     };
 
     const captureLoop = async () => {
-      setCaptureStatus("Recording three-second clips for sliding windows");
+      setCaptureStatus("Recording one-second clips for sliding windows");
       while (active) {
         try {
           const recorded = await camera.recordAsync({
@@ -233,9 +277,10 @@ export default function HikerScreen() {
       monitoringRef.current = true;
       checkinTriggeredRef.current = false;
       clipSequenceRef.current = 0;
+      nextFallAssessmentSequenceRef.current = FALL_WINDOW_SEGMENTS - 1;
       setCameraReady(false);
       setFallResult(null);
-      setFallCheckStatus("Waiting to fill the first 9-second window");
+      setFallCheckStatus("Waiting to fill the first 4-second window");
       setLive(true);
       setNotice(micPermission.granted ? null : "Microphone is off. Fall checks will use video only.");
     } else {
@@ -373,8 +418,8 @@ export default function HikerScreen() {
               <Text style={styles.sectionTitle}>{fallOnlyMode ? "Indoor fall-only test" : "Live fall detection"}</Text>
               <Text style={styles.rowSubtitle}>
                 {fallOnlyMode
-                  ? "Three-second clips build a rolling 9-second fall window. Each new clip advances it by 3 seconds, keeping 6 seconds of previous context. A YES opens the check-in; this test will not place a call."
-                  : "Three-second clips build rolling windows for falls and trail hazards. Each new clip advances the fall window by 3 seconds, keeping 6 seconds of previous context. A YES opens the check-in; this test will not place a call."}
+                  ? "One-second clips build a rolling 4-second fall window. TrailSense checks it every 3 seconds, retaining 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."
+                  : "One-second clips build rolling 4-second fall windows, checked every 3 seconds with 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."}
               </Text>
               <Text accessibilityLiveRegion="polite" style={styles.fallStatus}>{fallCheckStatus}</Text>
               {fallResult ? (

@@ -71,6 +71,8 @@ MIN_ORB_MATCHES = 8
 OPENCV_FALL_CONFIDENCE = 0.5
 # Treat model answers below 50% confidence as inconclusive and check motion too.
 VLM_CONFIDENCE_THRESHOLD = 0.50
+FALL_WINDOW_SEGMENTS = 4
+FALL_CHECK_STRIDE_SEGMENTS = 3
 FALL_PROMPT = (
     "This is footage from a chest-mounted camera worn by a hiker on a trail. Did "
     "the hiker wearing the camera fall to the ground during this event? A stumble "
@@ -207,16 +209,18 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
 
 
 def assemble_fall_window(segments: list[tuple[bytes, str]]) -> Path:
-    """Join three consecutive three-second segments into a video-only window.
+    """Join four consecutive one-second segments into a video-only window.
 
-    The mobile app sends three-second segments. The returned temporary MP4 is
-    assembled in order from the most recent three segments, making a nine-second
-    window that advances by three seconds per request. OpenCV's composite is for
-    motion analysis; Perceptron receives the original segments separately with
-    audio. The caller owns and must delete the returned path.
+    The mobile app sends one-second segments. The returned temporary MP4 is
+    assembled from the most recent four segments. Fall analysis advances by
+    three segments each time, keeping one second of overlap. OpenCV uses the
+    composite for motion analysis; Perceptron receives the original segments
+    separately with audio. The caller owns and must delete the returned path.
     """
-    if len(segments) != 3:
-        raise ValueError("A rolling fall window requires exactly three segments")
+    if len(segments) != FALL_WINDOW_SEGMENTS:
+        raise ValueError(
+            f"A rolling fall window requires exactly {FALL_WINDOW_SEGMENTS} segments"
+        )
 
     part_paths: list[Path] = []
     output_path: Path | None = None
@@ -344,8 +348,8 @@ def _request_fall_confirmation(
     if video_segments is not None:
         media = [video(segment) for segment in video_segments]
         prompt += (
-            " The request contains three consecutive three-second video segments "
-            "in oldest-to-newest order, covering a nine-second event; assess them "
+            " The request contains four consecutive one-second video segments "
+            "in oldest-to-newest order, covering a four-second event; assess them "
             "as one continuous event."
         )
     else:

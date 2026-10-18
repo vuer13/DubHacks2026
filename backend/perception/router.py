@@ -52,7 +52,7 @@ async def analyze_clip(
         curl -F 'clip=@clip.webm' -F 'session_id=demo' \\
           http://localhost:8000/api/clip
 
-    Live clients can include a zero-based ``sequence`` for three-second segments
+    Live clients can include a zero-based ``sequence`` for one-second segments
     so event timestamps follow capture order rather than model response latency.
     """
     if not session_id.strip():
