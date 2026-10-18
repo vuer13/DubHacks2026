@@ -2,6 +2,7 @@ import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { File } from "expo-file-system";
 import { useKeepAwake } from "expo-keep-awake";
+import * as DeviceSpeech from "expo-speech";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
@@ -50,6 +51,7 @@ export default function HikerScreen() {
   const [fallResult, setFallResult] = useState<FallCheckResponse | null>(null);
   const [fallCheckStatus, setFallCheckStatus] = useState("Waiting for live camera segments");
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [countdownSpeechActive, setCountdownSpeechActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState("Monitoring is off");
 
@@ -66,20 +68,33 @@ export default function HikerScreen() {
     }
     setNotice(null);
     setCountdown(CHECKIN_SECONDS);
+    setCountdownSpeechActive(false);
     stopWarningSpeech();
-    void speakWarning("Are you okay? Tap the button if you are okay.");
+    DeviceSpeech.speak(
+      "Are you okay? Tap the button if you are okay. I will count down from twenty.",
+      {
+        rate: 0.95,
+        volume: 1,
+        onDone: () => setCountdownSpeechActive(true),
+      },
+    );
   }, [live]);
 
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
+      setCountdownSpeechActive(false);
+      void DeviceSpeech.stop();
       setCountdown(null);
       setNotice("No response. The check-in ended; no SOS call was placed.");
       return;
     }
+    if (!countdownSpeechActive) return;
+    void DeviceSpeech.stop();
+    DeviceSpeech.speak(String(countdown), { rate: 1, volume: 1 });
     const timer = setTimeout(() => setCountdown((seconds) => (seconds === null ? null : seconds - 1)), 1000);
     return () => clearTimeout(timer);
-  }, [countdown]);
+  }, [countdown, countdownSpeechActive]);
 
   useEffect(() => {
     if (!live || !cameraReady) return;
@@ -321,6 +336,8 @@ export default function HikerScreen() {
 
   const cancelCheckinPreview = () => {
     setCountdown(null);
+    setCountdownSpeechActive(false);
+    void DeviceSpeech.stop();
     stopWarningSpeech();
     setNotice("Check-in cancelled. No SOS call was placed.");
   };

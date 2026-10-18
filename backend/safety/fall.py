@@ -106,9 +106,56 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
             or it is too short to calculate motion across the baseline and end.
     """
     capture = cv2.VideoCapture(str(clip_path))
+    frames, sample_fps = _sample_video_frames(capture, str(clip_path))
+    return _motion_signature_from_frames(frames, sample_fps)
+
+
+def motion_signature_from_segments(
+    segments: list[tuple[bytes, str]],
+) -> MotionSignature:
+    """Measure motion across consecutive uploaded clips without encoding a merge."""
+    if len(segments) != FALL_WINDOW_SEGMENTS:
+        raise ValueError(
+            f"A rolling fall window requires exactly {FALL_WINDOW_SEGMENTS} segments"
+        )
+
+    frames: list[np.ndarray] = []
+    sample_fps = TARGET_FPS
+    target_size: tuple[int, int] | None = None
+    for segment_bytes, filename in segments:
+        suffix = Path(filename).suffix.lower()
+        if suffix not in {".mp4", ".mov", ".m4v", ".webm"}:
+            suffix = ".mp4"
+        temp_path: Path | None = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as temp_file:
+                temp_path = Path(temp_file.name)
+                temp_file.write(segment_bytes)
+            capture = cv2.VideoCapture(str(temp_path))
+            segment_frames, segment_fps = _sample_video_frames(capture, str(temp_path))
+            sample_fps = min(sample_fps, segment_fps)
+            if target_size is None and segment_frames:
+                target_size = (segment_frames[0].shape[1], segment_frames[0].shape[0])
+            if target_size is not None:
+                for frame in segment_frames:
+                    if (frame.shape[1], frame.shape[0]) != target_size:
+                        frame = cv2.resize(frame, target_size, interpolation=cv2.INTER_AREA)
+                    frames.append(frame)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+
+    return _motion_signature_from_frames(frames, sample_fps)
+
+
+def _sample_video_frames(
+    capture: cv2.VideoCapture,
+    description: str,
+) -> tuple[list[np.ndarray], float]:
+    """Read and sample grayscale frames from an already-open video capture."""
     if not capture.isOpened():
         capture.release()
-        raise ValueError(f"Could not open fall clip: {clip_path}")
+        raise ValueError(f"Could not open fall clip: {description}")
 
     source_fps = float(capture.get(cv2.CAP_PROP_FPS))
     if not math.isfinite(source_fps) or source_fps <= 0:
@@ -144,6 +191,14 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
     finally:
         capture.release()
 
+    return frames, sample_fps
+
+
+def _motion_signature_from_frames(
+    frames: list[np.ndarray],
+    sample_fps: float,
+) -> MotionSignature:
+    """Calculate optical-flow and camera-rotation features from sampled frames."""
     if len(frames) < 2:
         raise ValueError("Fall clip is too short to measure motion")
 
@@ -206,97 +261,6 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
         "rotation_change_deg": rotation_change_deg,
         "opencv_fall_suspected": opencv_fall_suspected,
     }
-
-
-def assemble_fall_window(segments: list[tuple[bytes, str]]) -> Path:
-    """Join four consecutive one-second segments into a video-only window.
-
-    The mobile app sends one-second segments. The returned temporary MP4 is
-    assembled from the most recent four segments. Fall analysis advances by
-    three segments each time, keeping one second of overlap. OpenCV uses the
-    composite for motion analysis; Perceptron receives the original segments
-    separately with audio. The caller owns and must delete the returned path.
-    """
-    if len(segments) != FALL_WINDOW_SEGMENTS:
-        raise ValueError(
-            f"A rolling fall window requires exactly {FALL_WINDOW_SEGMENTS} segments"
-        )
-
-    part_paths: list[Path] = []
-    output_path: Path | None = None
-    writer: cv2.VideoWriter | None = None
-    output_fps: float | None = None
-    output_size: tuple[int, int] | None = None
-    written_frames = 0
-
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as output_file:
-            output_path = Path(output_file.name)
-
-        for segment_bytes, filename in segments:
-            suffix = Path(filename).suffix.lower()
-            if suffix not in {".mp4", ".mov", ".m4v", ".webm"}:
-                suffix = ".mp4"
-            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as part_file:
-                part_path = Path(part_file.name)
-                part_file.write(segment_bytes)
-            part_paths.append(part_path)
-
-            capture = cv2.VideoCapture(str(part_path))
-            if not capture.isOpened():
-                capture.release()
-                raise ValueError("Could not read a recorded fall-window segment")
-
-            source_fps = float(capture.get(cv2.CAP_PROP_FPS))
-            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            if not math.isfinite(source_fps) or source_fps <= 0 or width <= 0 or height <= 0:
-                capture.release()
-                raise ValueError("Could not read video properties for a fall-window segment")
-
-            if output_fps is None:
-                output_fps = min(source_fps, 15.0)
-                output_size = (width, height)
-                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                writer = cv2.VideoWriter(
-                    str(output_path), fourcc, output_fps, output_size
-                )
-                if not writer.isOpened():
-                    capture.release()
-                    raise ValueError("Could not create the rolling fall-window video")
-
-            assert output_fps is not None and output_size is not None and writer is not None
-            sample_every = max(1, round(source_fps / output_fps))
-            frame_index = 0
-            try:
-                while True:
-                    ok, frame = capture.read()
-                    if not ok:
-                        break
-                    if frame_index % sample_every == 0:
-                        if (frame.shape[1], frame.shape[0]) != output_size:
-                            frame = cv2.resize(frame, output_size, interpolation=cv2.INTER_AREA)
-                        writer.write(frame)
-                        written_frames += 1
-                    frame_index += 1
-            finally:
-                capture.release()
-
-        if writer is not None:
-            writer.release()
-            writer = None
-        if output_path is None or written_frames < 6 or output_path.stat().st_size == 0:
-            raise ValueError("The rolling fall window did not contain enough video frames")
-        return output_path
-    except Exception:
-        if writer is not None:
-            writer.release()
-        if output_path is not None:
-            output_path.unlink(missing_ok=True)
-        raise
-    finally:
-        for part_path in part_paths:
-            part_path.unlink(missing_ok=True)
 
 
 def _estimate_rotation_degrees(before: np.ndarray, after: np.ndarray) -> float | None:
@@ -435,8 +399,12 @@ async def vlm_confirm(
     block FastAPI's event loop. Invalid or incomplete model output is rejected.
     """
     path = Path(clip_path)
-    if not path.is_file():
+    if video_segments is None and not path.is_file():
         raise ValueError(f"Fall clip does not exist: {path}")
+    if video_segments is not None and len(video_segments) != FALL_WINDOW_SEGMENTS:
+        raise ValueError(
+            f"Fall confirmation requires exactly {FALL_WINDOW_SEGMENTS} video segments"
+        )
 
     started = perf_counter()
     try:
@@ -487,6 +455,7 @@ async def assess(
     *,
     audio_available: bool = True,
     video_segments: list[bytes] | None = None,
+    opencv_segments: list[tuple[bytes, str]] | None = None,
 ) -> FallAssessment:
     """Use Mk1.5 first and consult OpenCV when its answer is inconclusive."""
     try:
@@ -525,7 +494,12 @@ async def assess(
         )
 
     try:
-        signature = await asyncio.to_thread(motion_signature, clip_path)
+        if opencv_segments is not None:
+            signature = await asyncio.to_thread(
+                motion_signature_from_segments, opencv_segments
+            )
+        else:
+            signature = await asyncio.to_thread(motion_signature, clip_path)
     except (ValueError, cv2.error) as exc:
         LOGGER.warning("OpenCV fall fallback unavailable: %s", exc)
         return FallAssessment(
