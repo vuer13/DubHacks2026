@@ -176,6 +176,7 @@ backend/data/logs/*
 !backend/data/logs/.gitkeep
 backend/data/sessions/*
 !backend/data/sessions/.gitkeep
+backend/data/tts/*
 
 # Spyder project settings
 .spyderproject

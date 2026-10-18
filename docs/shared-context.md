@@ -4,7 +4,7 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Live mode requests hazard analysis every 3 seconds over a rolling frame window; Perceptron Mk1.5 returns hazards as structured JSON. Prompts include trip risks and people or animals that could cause a collision, using the existing hazard categories. A smoothing layer speaks only new detected hazards and remains silent when none are found. A fall check runs alongside hazard analysis and interrupts warning speech when a fall is suspected. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
 
 The hiker uses the TrailSense app: one React Native codebase (Expo SDK 57, Expo Router) that runs on iPhone and Android and also builds the web share page the emergency contact opens in any browser. The ElevenLabs voice agent runs in an Expo development build; everything else also runs in Expo Go.
 
@@ -13,7 +13,7 @@ The primary demo is a recorded trail video replayed with pre-computed events and
 ## Non-negotiable principles
 
 - Short, direction-first speech. "Drop-off, left, stop." Never a paragraph during a warning.
-- Silence is a feature. Repeat nothing within 20 seconds unless it got closer.
+- Silence is a feature. Repeat nothing within 20 seconds.
 - A fall never triggers SOS without a voice check-in first.
 - Every model call returns JSON that validates against the schema below, or we discard it and log it.
 - Everything degrades gracefully. If a model call fails, the app keeps running and says nothing.
@@ -115,9 +115,9 @@ All JSON. CORS open during development.
 | POST | `/api/sos` | `{"session_id","reason","lat","lng","recent_events":[...]}` | `{"sent": true, "to": "+1..."}` | C |
 | POST | `/api/sos/cancel` | `{"session_id"}` | `{"cancelled": true}` | C |
 | GET | `/api/voice/token` | | `{"conversation_token": "..."}`. Calls ElevenLabs `GET /v1/convai/conversation/token?agent_id=...` with the server-side key; the app passes the token to the agent SDK (WebRTC). **Proposed 2026-10-18** | B |
-| POST | `/api/voice/tts` | `{"text"}` | `audio/mpeg`. Proxies ElevenLabs text to speech (`eleven_flash_v2_5`, mp3), cached by text hash under `backend/data/tts/`. Used for warnings, the pre-brief and sign readouts. **Proposed 2026-10-18** | B |
+| POST | `/api/voice/tts` | `{"text"}` | `audio/mpeg`. Proxies ElevenLabs text to speech (`eleven_flash_v2_5`, mp3), cached under `backend/data/tts/`. Used for warnings and check-in prompts. Implemented in `backend/voice/`. | B |
 
-The two voice endpoints used to be Next.js server routes. The React Native app has no server of its own and must never hold the ElevenLabs key, so they move to the backend in `backend/voice/`, owned by App/Voice. They need the whole team's agreement like any contract change. The app reads `/api/clip` uploads from `expo-camera`; confirm the container each platform records (Step B5) and that the backend's ffmpeg accepts it.
+The ElevenLabs key stays on the backend; the React Native app calls `/api/voice/tts` and never holds the key. The conversation token endpoint remains proposed. The app reads `/api/clip` uploads from `expo-camera`; confirm the container each platform records (Step B5) and that the backend's ffmpeg accepts it.
 
 App routes (Expo Router, `frontend/app/`):
 
@@ -159,7 +159,7 @@ Model `perceptron-mk1.5` on `https://api.perceptron.inc/v1/chat/completions` (`p
 
 | Need | Mk1.5 feature | Request shape |
 |---|---|---|
-| Hazard JSON every 3 s, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
+| Hazard JSON every 3 s in live mode, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
 | Direction and distance from geometry | Pointing | second request, `vision_config={"annotation_format":"point"}`, only for severity 2 and 3 |
 | Confirm a severity 3 | Regex output | `regex="yes\|no"` |
 | Trail signs, junction posts, warning signs | OCR + structured output | `response_format` json_schema for `SignReading`, `reasoning_effort="high"` |
@@ -174,7 +174,7 @@ Guidance from Perceptron: "For passing data to the model, if you're trying to do
 
 | Mode | Where | What we send |
 |---|---|---|
-| Continuous monitoring | Live `/api/clip`, and the offline replay pipeline (it simulates live so replay matches what live would say) | A running window. The backend samples frames at `FRAME_FPS` (default 2, 480p) into a per-session ring buffer. Every `STRIDE_S` (default 3 s) it sends the last `WINDOW_S` (default 6 s, about 12 frames) as one `video_frames` asset with real timestamps. The model sees what led up to now, so it can tell an approaching edge from a passing shadow |
+| Continuous monitoring | Live `/api/clip`, and the offline replay pipeline (it simulates live so replay matches what live would say) | A running window. Live Expo sends one-second segments for hazard analysis every 3 seconds; the backend samples submitted frames at 2 fps, 480p, into a per-session ring buffer. Each request sends up to the last 6 seconds of sampled frames as one `video_frames` asset with real timestamps. The model sees recent context, though live capture cadence and model latency can leave gaps |
 | Batching | Whole-video offline jobs: clip-event ground truth, trail tracking, demo-script timestamps | Frames or a contact sheet. `video_frames` at 1 to 2 fps with source-video timestamps when exact times matter, in segments that fit 256 media units and the token budget. A contact sheet is one grid image of thumbnails with the timestamp burned into each tile. It costs one media unit, so use it for a cheap first scan that picks which segments get the frame pass |
 | Single frame | Grounding, sign reading, severity 3 confirmation | The latest frame of the window as one image |
 | Real clip | Fall confirmation | `video()` of the posted chunk, because `enable_audio_in_video` needs a real video asset |

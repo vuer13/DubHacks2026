@@ -1,5 +1,6 @@
 """Perception API routes."""
 
+import logging
 import re
 import shutil
 import uuid
@@ -26,6 +27,7 @@ from ..models import (
 from .pipeline import DATA_DIR, analyze_video
 
 router = APIRouter(prefix="/api", tags=["perception"])
+LOGGER = logging.getLogger(__name__)
 MAX_LIVE_CLIP_BYTES = 25 * 1024 * 1024
 
 JOBS_DIR = DATA_DIR / "jobs"
@@ -145,6 +147,7 @@ async def analyze_clip(
     except HTTPException:
         raise
     except Exception as exc:
+        LOGGER.exception("Live hazard analysis failed for session %s", session_id)
         raise HTTPException(
             status_code=503,
             detail="Trail clip analysis is temporarily unavailable",
