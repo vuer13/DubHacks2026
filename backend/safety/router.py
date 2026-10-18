@@ -25,6 +25,8 @@ from ..models import (
     TrailSenseModel,
 )
 from .fall import FallAssessment, FallSignals, assess
+from .sos import cancel_sos as cancel_sos_for_session
+from .sos import call_sos as deliver_sos
 
 router = APIRouter(prefix="/api", tags=["safety"])
 LOGGER = logging.getLogger(__name__)
@@ -164,7 +166,7 @@ async def check_for_fall(
 
 @router.post("/sos", response_model=SosResponse)
 async def send_sos(request: SosRequest) -> SosResponse:
-    """Request an SOS message after the voice check-in flow.
+    """Place an SOS call after the voice check-in flow.
 
     Example:
         curl -H 'Content-Type: application/json' \\
@@ -172,7 +174,16 @@ async def send_sos(request: SosRequest) -> SosResponse:
 \"lat\":49.3,\"lng\":-123.1,\"recent_events\":[]}' \\
           http://localhost:8000/api/sos
     """
-    _todo("SOS delivery")
+    result = await deliver_sos(
+        session_id=request.session_id,
+        reason=request.reason,
+        lat=request.lat,
+        lng=request.lng,
+        recent_events=request.recent_events,
+    )
+    if not result["sent"]:
+        LOGGER.warning("SOS call was not placed: %s", result["reason"])
+    return SosResponse(sent=result["sent"], to=result["to"])
 
 
 @router.post("/sos/cancel", response_model=SosCancelResponse)
@@ -184,4 +195,4 @@ async def cancel_sos(request: SosCancelRequest) -> SosCancelResponse:
           -d '{\"session_id\":\"demo\"}' \\
           http://localhost:8000/api/sos/cancel
     """
-    _todo("SOS cancellation")
+    return SosCancelResponse(cancelled=cancel_sos_for_session(request.session_id))

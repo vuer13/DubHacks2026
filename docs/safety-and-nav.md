@@ -10,7 +10,7 @@ Before you start: read [`shared-context.md`](./shared-context.md) (or point your
 
 No agent needed. Do these by hand:
 
-1. Create accounts and get keys: Perceptron (for Perception; key at perceptron.inc, try the playground while you are there), ElevenLabs (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can text it). Put backend keys in the repository-root `.env`, frontend keys in `frontend/.env.local`, and share them with the team over a private channel, never in git.
+1. Create accounts and get keys: Perceptron (for Perception; key at perceptron.inc, try the playground while you are there), ElevenLabs (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can call it). Put backend keys in the repository-root `.env`, frontend keys in `frontend/.env.local`, and share them with the team over a private channel, never in git.
 2. Go record footage. Phone at chest height, landscape, 1080p 30 fps. Record these as separate clips, 60 to 90 s each, on the nearest trail with some variety (a park with stairs and a creek works if a real trail is far):
    - `clear.mp4`: easy clear trail, steady walking
    - `roots.mp4`: roots, steps, uneven ground
@@ -88,7 +88,7 @@ backend/safety/fall.py:
 - async assess(clip_path) -> FallAssessment with fields fell, confidence, signals. Call Mk1.5 first. A yes/no with confidence >= 0.50 is returned without OpenCV work. If Mk1.5 errors, returns unsure, or has confidence below 0.50, run motion_signature. OpenCV positive fall cues return yes with confidence 0.5 (an uncalibrated placeholder); absent cues or an OpenCV failure return unsure, not no, because a sliding window may end before post-fall stillness appears.
 
 backend/safety/sos.py:
-- send_sos(session_id, reason, lat, lng, recent_events) -> {"sent": bool, "to": str, "sid": str}: builds a message like "TrailSense alert: <name or session_id> may need help. <reason>. Last location: https://maps.google.com/?q=<lat>,<lng> at <local time>. Recent: <up to 3 say strings>. Live: <SHARE_BASE_URL>/share/<session_id>" and sends it via Twilio REST to EMERGENCY_CONTACT_NUMBER. If Twilio env vars are missing, log the message to backend/data/logs/sos.log and return sent=false with a clear reason. Never raise.
+- call_sos(session_id, reason, lat, lng, recent_events) -> {"sent": bool, "to": str, "sid": str}: places a Twilio voice call to EMERGENCY_CONTACT_NUMBER and reads the reason, latest coordinates, recent warnings, and live share link aloud using TwiML `<Say>`. `sent=true` means Twilio accepted the call request, not that the person answered. If Twilio env vars are missing or the call fails, log the spoken message to backend/data/logs/sos.log and return sent=false with a clear reason. Never raise.
 - cancel_sos(session_id): marks a pending SOS cancelled in memory and logs a fall_cancelled event.
 
 Routes in backend/safety/router.py:
@@ -98,13 +98,13 @@ Routes in backend/safety/router.py:
 Tests in backend/tests/test_fall.py: cover optical-flow features on synthetic rotating and vertically sweeping clips, model-first behavior, and OpenCV fallback when Mk1.5 is inconclusive or unavailable. To train an SVM or Random Forest later, collect labeled fall and non-fall clips and export the per-clip features; no classifier is trained until those labels are available.
 ```
 
-**Done when**: `fall.mp4` assesses "yes", `stumble.mp4` assesses "no", and a test SMS arrives on the verified phone (send one real one now so you know the Twilio trial works; it prefixes "Sent from your Twilio trial account", which is fine).
+**Done when**: `fall.mp4` assesses "yes", `stumble.mp4` assesses "no", and a test voice call reaches the verified phone and reads a clearly marked test alert. The Twilio Voice trial requires a verified destination in the same country and uses its Voice trial number, which may differ from the Messaging trial number.
 
 ---
 
 ## Step C4: integration
 
-Follow [`integration-and-demo.md`](./integration-and-demo.md). You run the fall sequence: play `fall.mp4` in the app with App/Voice, confirm the check-in starts, stay silent, confirm the SMS arrives with a working share link. Then play `stumble.mp4` and confirm nothing fires.
+Follow [`integration-and-demo.md`](./integration-and-demo.md). You run the fall sequence: play `fall.mp4` in the app with App/Voice, confirm the check-in starts, stay silent, confirm the call reads the location and live share link. Then play `stumble.mp4` and confirm nothing fires.
 
 ---
 
@@ -131,4 +131,4 @@ No agent. Write `demo/SCRIPT.md` using the outline in [`integration-and-demo.md`
 
 ## Step C7: rehearsal
 
-You watch the share page and SMS during each rehearsal, confirm the link opens, and keep the demo tight (aim for under about 4 minutes).
+You watch the share page and voice call during each rehearsal, confirm the link opens, and keep the demo tight (aim for under about 4 minutes).

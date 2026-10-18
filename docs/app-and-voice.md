@@ -141,7 +141,7 @@ Read docs/shared-context.md. Add live mode and the fall check-in.
 3. Fall check-in, owned by the frontend (frontend/lib/safety/checkin.ts), not by the agent:
    - Count consecutive /api/fall/check responses where fell is "yes". Start the check-in only after two consecutive yes results; reset the count on "no" or "unsure". A single yes or an unsure result must not start the check-in. After the second yes, play the sos earcon, Speech.say("Are you okay? Say anything to cancel.", {priority: 3}), show a giant countdown from 20 in the status area, and repeat the earcon every 5 seconds. If the agent is connected, also sendUserMessage("[SYSTEM] Possible fall detected. Ask the hiker once if they are okay, then wait.").
    - Cancel on any of: a final user transcript from onMessage, a tap anywhere, or the agent calling cancel_sos. On cancel: POST /api/sos/cancel, Speech.say("Cancelled. Help is not being called."), sendContextualUpdate("Fall check-in cancelled by the hiker.").
-   - If the countdown reaches zero: POST /api/sos directly from the frontend with the latest location and recent say strings, Speech.say("Calling for help now."), sendContextualUpdate("SOS sent to the emergency contact.").
+   - If the countdown reaches zero: POST /api/sos directly from the frontend with the latest location and recent say strings, Speech.say("Calling for help now."), sendContextualUpdate("SOS call placed to the emergency contact.").
    - In replay mode the same check-in can be triggered from a dev button so we can rehearse it without dropping a phone.
 4. Keep live mode and replay mode mutually exclusive.
 

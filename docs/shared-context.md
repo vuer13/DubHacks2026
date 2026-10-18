@@ -4,7 +4,7 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
 
 The primary demo is a recorded trail video replayed with pre-computed events and pre-rendered speech. Live camera mode exists but is secondary.
 
@@ -139,7 +139,7 @@ Coordination rules: every spoken warning is also sent to the agent with `sendCon
 | `describe_surroundings` | POST `/api/describe` with the latest clip | Reads `scene` |
 | `read_sign` | POST `/api/read_sign` with the latest frame | Reads `sign.say`, then the lines if asked |
 | `where_am_i` | GET `/api/location/{id}` + `/api/trail/{id}/brief` | Distance covered, off-trail status |
-| `start_sos` | POST `/api/sos` | Confirms help was contacted |
+| `start_sos` | POST `/api/sos` | Confirms a call was placed to the emergency contact |
 | `cancel_sos` | POST `/api/sos/cancel` | Confirms cancellation |
 
 Tool names and parameter names are case-sensitive and must match the dashboard config exactly. The four question tools need "Wait for response" on; the two SOS tools return a confirmation string too.
