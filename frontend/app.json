@@ -15,7 +15,8 @@
           "microphonePermission": "TrailSense uses audio to help assess live fall clips.",
           "recordAudioAndroid": true
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "ios": {
       "supportsTablet": false

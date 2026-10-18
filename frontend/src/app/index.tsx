@@ -2,7 +2,6 @@ import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { File } from "expo-file-system";
 import { useKeepAwake } from "expo-keep-awake";
-import * as Speech from "expo-speech";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Pressable,
@@ -16,12 +15,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { analyzeLiveClip, checkFallClip } from "@/lib/api";
 import { createSessionId } from "@/lib/session";
+import { speakWarning, stopWarningSpeech } from "@/lib/voice/warnings";
 import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
 
 const CHECKIN_SECONDS = 20;
 const SEGMENT_SECONDS = 1;
 const FALL_WINDOW_SEGMENTS = 4;
 const FALL_CHECK_STRIDE_SEGMENTS = 3;
+const HAZARD_CHECK_STRIDE_SEGMENTS = 2;
 const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 
 type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
@@ -33,6 +34,7 @@ export default function HikerScreen() {
   const pendingClipsRef = useRef<PendingClip[]>([]);
   const clipSequenceRef = useRef(0);
   const nextFallAssessmentSequenceRef = useRef(FALL_WINDOW_SEGMENTS - 1);
+  const nextHazardAssessmentSequenceRef = useRef(HAZARD_CHECK_STRIDE_SEGMENTS - 1);
   const generationRef = useRef(0);
   const monitoringRef = useRef(false);
   const checkinTriggeredRef = useRef(false);
@@ -41,7 +43,7 @@ export default function HikerScreen() {
   const [sessionId] = useState(createSessionId);
   const [live, setLive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const [fallOnlyMode, setFallOnlyMode] = useState(true);
+  const [fallOnlyMode, setFallOnlyMode] = useState(false);
   const [lowVision, setLowVision] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [events, setEvents] = useState<ClipEvent[]>([]);
@@ -64,8 +66,8 @@ export default function HikerScreen() {
     }
     setNotice(null);
     setCountdown(CHECKIN_SECONDS);
-    void Speech.stop();
-    Speech.speak("Are you okay? Tap the button if you are okay.", { rate: 0.95 });
+    stopWarningSpeech();
+    void speakWarning("Are you okay? Tap the button if you are okay.");
   }, [live]);
 
   useEffect(() => {
@@ -146,59 +148,87 @@ export default function HikerScreen() {
           } else {
             setFallCheckStatus("Assessing the latest sliding 4-second window…");
           }
-          let trailResult: PromiseSettledResult<ClipResponse> | null = null;
-          let fallCheck: PromiseSettledResult<FallCheckResponse>;
-          if (current.fallOnly) {
-            const [result] = await Promise.allSettled([
-              checkFallClip(current.uri, sessionId, current.sequence),
-            ]);
-            fallCheck = result;
-          } else {
-            [trailResult, fallCheck] = await Promise.allSettled([
-              analyzeLiveClip(current.uri, sessionId, current.sequence),
-              checkFallClip(current.uri, sessionId, current.sequence),
-            ]);
+          const isCurrent = () =>
+            monitoringRef.current && current.generation === generationRef.current;
+          const hazardAssessmentDue =
+            !current.fallOnly && current.sequence >= nextHazardAssessmentSequenceRef.current;
+          if (hazardAssessmentDue) {
+            nextHazardAssessmentSequenceRef.current =
+              current.sequence + HAZARD_CHECK_STRIDE_SEGMENTS;
           }
 
-          const isCurrent = monitoringRef.current && current.generation === generationRef.current;
-          if (isCurrent && trailResult?.status === "fulfilled") {
-            const response = trailResult.value;
-            setEvents((previous) => [response.event, ...previous].slice(0, 8));
-            setCaptureStatus("Recording and analyzing live segments");
-            const warning = response.speak[0];
-            if (warning) {
-              void Speech.stop();
-              Speech.speak(warning.say, { rate: 0.92 });
-            }
-          } else if (isCurrent && trailResult?.status === "rejected") {
-            const message = trailResult.reason instanceof Error ? trailResult.reason.message : "Clip analysis failed";
-            setNotice(`Could not analyze the latest trail clip: ${message}`);
-            setCaptureStatus("Camera is recording; backend analysis is unavailable");
-          }
-          if (isCurrent && fallCheck.status === "fulfilled") {
-            if (fallAssessmentDue) {
-              setFallResult(fallCheck.value);
-              if (current.sequence >= nextFallAssessmentSequenceRef.current) {
-                nextFallAssessmentSequenceRef.current = Math.max(
-                  nextFallAssessmentSequenceRef.current,
-                  current.sequence + FALL_CHECK_STRIDE_SEGMENTS,
+          // Handle each result as it arrives so a positive fall result can
+          // interrupt a hazard warning that is already being generated or spoken.
+          const hazardTask: Promise<ClipResponse | null> = hazardAssessmentDue
+            ? analyzeLiveClip(current.uri, sessionId, current.sequence)
+                .then((response) => {
+                  if (isCurrent()) {
+                    setEvents((previous) => [response.event, ...previous].slice(0, 8));
+                    setCaptureStatus("Recording and analyzing live segments");
+                    const warning = response.speak[0];
+                    console.info(
+                      `Hazard result: count=${response.event.hazards.length} latency_ms=${response.event.latency_ms}`,
+                      response.event.hazards,
+                    );
+                    console.info(
+                      `Hazard decision: source=perceptron warning=${warning?.say ?? "none"}`,
+                    );
+                    if (warning && !checkinTriggeredRef.current) {
+                      void speakWarning(warning.say);
+                    }
+                  }
+                  return response;
+                })
+                .catch((error: unknown) => {
+                  if (isCurrent()) {
+                    const message = error instanceof Error ? error.message : "Clip analysis failed";
+                    setNotice(`Could not analyze the latest trail clip: ${message}`);
+                    setCaptureStatus("Camera is recording; backend analysis is unavailable");
+                  }
+                  throw error;
+                })
+            : Promise.resolve(null);
+
+          const fallRequestStartedAt = Date.now();
+          const fallTask = checkFallClip(current.uri, sessionId, current.sequence)
+            .then((result) => {
+              if (!isCurrent()) return result;
+              if (fallAssessmentDue) {
+                setFallResult(result);
+                console.info(
+                  `Fall result: fell=${result.fell} confidence=${result.confidence.toFixed(3)} latency_ms=${Date.now() - fallRequestStartedAt}`,
                 );
+                if (current.sequence >= nextFallAssessmentSequenceRef.current) {
+                  nextFallAssessmentSequenceRef.current = Math.max(
+                    nextFallAssessmentSequenceRef.current,
+                    current.sequence + FALL_CHECK_STRIDE_SEGMENTS,
+                  );
+                }
+                setFallCheckStatus("Latest sliding 4-second window assessed");
+              } else {
+                const remaining = Math.max(
+                  1,
+                  nextFallAssessmentSequenceRef.current - current.sequence,
+                );
+                setFallCheckStatus(`Collecting clips; next fall assessment in ${remaining} second(s)`);
               }
-              setFallCheckStatus("Latest sliding 4-second window assessed");
-            } else {
-              const remaining = Math.max(
-                1,
-                nextFallAssessmentSequenceRef.current - current.sequence,
-              );
-              setFallCheckStatus(`Collecting clips; next fall assessment in ${remaining} second(s)`);
-            }
-            if (fallCheck.value.fell === "yes" && !checkinTriggeredRef.current) {
-              startCheckinPreview();
-            }
-          } else if (isCurrent && fallCheck.status === "rejected") {
-            const message = fallCheck.reason instanceof Error ? fallCheck.reason.message : "Fall check failed";
-            setFallCheckStatus(`Fall check failed: ${message}`);
-          }
+              if (result.fell === "yes" && !checkinTriggeredRef.current) {
+                console.info(
+                  `Fall decision: source=perceptron fell=yes confidence=${result.confidence.toFixed(3)}`,
+                );
+                startCheckinPreview();
+              }
+              return result;
+            })
+            .catch((error: unknown) => {
+              if (isCurrent()) {
+                const message = error instanceof Error ? error.message : "Fall check failed";
+                setFallCheckStatus(`Fall check failed: ${message}`);
+              }
+              throw error;
+            });
+
+          await Promise.allSettled([hazardTask, fallTask]);
           deleteRecordedClip(current.uri);
           if (monitoringRef.current && current.generation === generationRef.current) {
             const queued = pendingClipsRef.current.length;
@@ -253,7 +283,7 @@ export default function HikerScreen() {
     monitoringRef.current = false;
     generationRef.current += 1;
     cameraRef.current?.stopRecording();
-    void Speech.stop();
+    stopWarningSpeech();
   }, []);
 
   const toggleMonitoring = async () => {
@@ -264,7 +294,7 @@ export default function HikerScreen() {
       setLive(false);
       setCameraReady(false);
       setCaptureStatus("Monitoring is off");
-      void Speech.stop();
+      stopWarningSpeech();
       return;
     }
 
@@ -278,6 +308,7 @@ export default function HikerScreen() {
       checkinTriggeredRef.current = false;
       clipSequenceRef.current = 0;
       nextFallAssessmentSequenceRef.current = FALL_WINDOW_SEGMENTS - 1;
+      nextHazardAssessmentSequenceRef.current = HAZARD_CHECK_STRIDE_SEGMENTS - 1;
       setCameraReady(false);
       setFallResult(null);
       setFallCheckStatus("Waiting to fill the first 4-second window");
@@ -290,7 +321,7 @@ export default function HikerScreen() {
 
   const cancelCheckinPreview = () => {
     setCountdown(null);
-    void Speech.stop();
+    stopWarningSpeech();
     setNotice("Check-in cancelled. No SOS call was placed.");
   };
 
@@ -298,7 +329,7 @@ export default function HikerScreen() {
   const latestHazard = latestEvent?.hazards[0];
   const statusTitle = fallOnlyMode
     ? "Fall-only test"
-    : latestHazard?.say ?? (latestEvent ? "Trail clear" : "Ready to monitor");
+    : latestHazard?.say ?? (latestEvent ? "No hazard detected" : "Ready to monitor");
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {live ? <KeepCameraAwake /> : null}
@@ -404,7 +435,7 @@ export default function HikerScreen() {
                 {showLog ? (
                   events.length ? events.map((event) => (
                     <View key={event.clip_id} style={styles.eventRow}>
-                      <Text style={styles.eventTitle}>{event.hazards[0]?.say ?? "Trail clear"}</Text>
+                      <Text style={styles.eventTitle}>{event.hazards[0]?.say ?? "No hazard detected"}</Text>
                       <Text style={styles.rowSubtitle}>{event.scene}</Text>
                     </View>
                   )) : <Text style={styles.logEmpty}>Warnings and trail events will appear here.</Text>
@@ -415,11 +446,11 @@ export default function HikerScreen() {
 
           <View style={styles.bottomActions}>
             <View style={styles.fallTestCard}>
-              <Text style={styles.sectionTitle}>{fallOnlyMode ? "Indoor fall-only test" : "Live fall detection"}</Text>
+              <Text style={styles.sectionTitle}>{fallOnlyMode ? "Indoor fall-only test" : "Live safety monitoring"}</Text>
               <Text style={styles.rowSubtitle}>
                 {fallOnlyMode
                   ? "One-second clips build a rolling 4-second fall window. TrailSense checks it every 3 seconds, retaining 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."
-                  : "One-second clips build rolling 4-second fall windows, checked every 3 seconds with 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."}
+                  : "Hazard requests use a 2-second captured-time cadence while falls are checked in overlapping 4-second windows. Model responses may lag. Speech plays only for a new detected hazard; a suspected fall interrupts it and opens the check-in. Older queued clips are dropped if analysis falls behind. This test will not place a call."}
               </Text>
               <Text accessibilityLiveRegion="polite" style={styles.fallStatus}>{fallCheckStatus}</Text>
               {fallResult ? (

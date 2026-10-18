@@ -31,7 +31,9 @@ Backend, from the repository root:
     uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 Keep backend keys in the repository-root `.env` file. The backend loads only
-that file for local settings.
+that file for local settings. For spoken hazard warnings, set
+`ELEVENLABS_API_KEY` and `ELEVENLABS_VOICE_ID` there; the TTS model defaults to
+`eleven_flash_v2_5`. The app falls back to device speech when these are unset.
 
 App, in another terminal:
 
@@ -56,8 +58,8 @@ Run it one of three ways:
   `http://localhost:8081/share/demo`.
 
 The app records repeated 1-second camera clips while monitoring is active. In
-trail mode, clips go to `POST /api/clip` for hazard analysis. Fall checks combine
-four clips into a rolling four-second window, then advance by three clips to
+live safety mode, it checks hazards every 2 seconds and checks falls separately
+using overlapping four-second windows. Fall checks advance by three clips to
 retain one second of overlap. The first result needs four seconds of footage.
 Camera recordings restart between clips, so short gaps are possible. Analysis is
 processed in capture order, with at most four waiting clips; older queued clips
@@ -66,9 +68,14 @@ are dropped when model latency falls behind. One nine-second fall request took
 but latency still needs measuring. Keep the app open in the foreground during
 live monitoring. On a physical phone, the backend URL must use the Mac's Wi-Fi IP.
 
+For live diagnostics, watch the Expo/Metro terminal for `Hazard result`,
+`Hazard decision`, and `Fall result` lines. The backend also writes structured
+Perceptron logs to `backend/data/logs/perception_model.jsonl` and
+`backend/data/logs/fall_model.jsonl`.
+
 The backend health check is at http://localhost:8000/health.
 API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio
-integrations, and they all live in the repository-root `.env`.
+integrations; keep them in the repository-root `.env`.
 
 ## Code ownership
 
