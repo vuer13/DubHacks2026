@@ -14,12 +14,17 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { CheckinOverlay, CancelledScreen } from "@/components/safety/CheckinOverlay";
+import { SosBanner, SosScreen } from "@/components/safety/SosScreens";
+import { useCheckin } from "@/hooks/useCheckin";
 import { analyzeLiveClip, checkFallClip } from "@/lib/api";
+import { CHECKIN_SECONDS, SOS_TEXT, sosBannerText } from "@/lib/checkin";
+import { emergencyContactPhone, openDialer } from "@/lib/native/dialer";
 import { createSessionId } from "@/lib/session";
 import { speakWarning, stopWarningSpeech } from "@/lib/voice/warnings";
 import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
+import { colors } from "@/theme/tokens";
 
-const CHECKIN_SECONDS = 20;
 const SEGMENT_SECONDS = 1;
 const FALL_WINDOW_SEGMENTS = 4;
 const FALL_CHECK_STRIDE_SEGMENTS = 3;
@@ -54,18 +59,32 @@ export default function HikerScreen() {
   const [countdownSpeechActive, setCountdownSpeechActive] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState("Monitoring is off");
+  // Dev only: off runs the whole SOS flow against a fake that contacts nobody.
+  const [realSos, setRealSos] = useState(false);
+  const eventsRef = useRef<ClipEvent[]>([]);
+  useEffect(() => {
+    eventsRef.current = events;
+  }, [events]);
+  const getRecentEvents = useCallback(() => eventsRef.current, []);
+  const checkin = useCheckin({ sessionId, getRecentEvents });
+  const { start: startCheckin } = checkin;
+  const contactPhone = emergencyContactPhone();
 
-  const startCheckinPreview = useCallback(() => {
+  const stopMonitoringForCheckin = useCallback(() => {
+    if (!live) return;
+    monitoringRef.current = false;
+    generationRef.current += 1;
+    cameraRef.current?.stopRecording();
+    setLive(false);
+    setCameraReady(false);
+    setCaptureStatus("Monitoring is off");
+  }, [live]);
+
+  // A YES from fall detection. These always call the real backend.
+  const startFallCheckin = useCallback(() => {
     if (checkinTriggeredRef.current) return;
     checkinTriggeredRef.current = true;
-    if (live) {
-      monitoringRef.current = false;
-      generationRef.current += 1;
-      cameraRef.current?.stopRecording();
-      setLive(false);
-      setCameraReady(false);
-      setCaptureStatus("Monitoring is off");
-    }
+    stopMonitoringForCheckin();
     setNotice(null);
     setCountdown(CHECKIN_SECONDS);
     setCountdownSpeechActive(false);
@@ -80,6 +99,13 @@ export default function HikerScreen() {
     );
   }, [live]);
 
+  const startDevCheckin = () => {
+    stopMonitoringForCheckin();
+    setNotice(null);
+    startCheckin("dev", realSos ? "real" : "fake");
+  };
+
+  // Fall detection may open a new check-in once this one is fully over.
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
@@ -289,7 +315,7 @@ export default function HikerScreen() {
       active = false;
       camera.stopRecording();
     };
-  }, [live, cameraReady, fallOnlyMode, sessionId, startCheckinPreview]);
+  }, [live, cameraReady, fallOnlyMode, sessionId, startFallCheckin]);
 
   useEffect(() => () => {
     monitoringRef.current = false;
@@ -347,25 +373,39 @@ export default function HikerScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {live ? <KeepCameraAwake /> : null}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.brand}>TrailSense</Text>
-          <Text style={styles.subtitle}>Trail guidance and safety</Text>
+      {checkin.keepAwake ? <KeepCheckinAwake /> : null}
+      {screen === "counting" ? null : (
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.brand}>TrailSense</Text>
+            <Text style={styles.subtitle}>Trail guidance and safety</Text>
+          </View>
         </View>
-      </View>
+      )}
+      {screen === "sos_banner" ? (
+        <SosBanner
+          text={sosBannerText(checkin.state)}
+          cancelStatus={checkin.state.cancelSosStatus}
+          cancelFailed={checkin.state.cancelSosError !== null}
+          onCancelSos={checkin.cancelSos}
+        />
+      ) : null}
 
-      {countdown !== null ? (
-        <View style={styles.checkinOverlay}>
-          <Text style={styles.checkinEyebrow}>FALL CHECK-IN · DEV MODE · NO CALL WILL BE PLACED</Text>
-          <Text style={styles.checkinTitle}>Are you okay?</Text>
-          <Text style={styles.checkinBody}>Tap below if you are okay. This test does not place a call.</Text>
-          <Text accessibilityLabel={`${countdown} seconds remaining`} style={styles.countdown}>
-            {countdown}
-          </Text>
-          <Pressable accessibilityRole="button" onPress={cancelCheckinPreview} style={styles.cancelButton}>
-            <Text style={styles.cancelButtonText}>I’m okay · Cancel</Text>
-          </Pressable>
-        </View>
+      {screen === "counting" ? (
+        <CheckinOverlay
+          seconds={checkin.state.countdownSeconds}
+          total={checkin.state.totalSeconds}
+          onCancel={checkin.cancel}
+        />
+      ) : screen === "cancelled" ? (
+        <CancelledScreen />
+      ) : screen === "sos_sending" || screen === "sos_failed" ? (
+        <SosScreen
+          failed={screen === "sos_failed"}
+          contactPhone={contactPhone}
+          onCallContact={callEmergencyContact}
+          onCancel={checkin.cancel}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
           {notice ? (
@@ -374,21 +414,29 @@ export default function HikerScreen() {
             </View>
           ) : null}
 
-          <View style={styles.statusCard}>
-            <Text style={styles.eyebrow}>
-              {lowVision ? "LOW-VISION VIEW" : fallOnlyMode ? "FALL TEST" : "HIKE STATUS"}
-            </Text>
-            <Text accessibilityLiveRegion="polite" style={lowVision ? styles.lowVisionText : styles.statusTitle}>
-              {statusTitle}
-            </Text>
-            <Text style={styles.statusBody}>
-              {live
-                ? captureStatus
-                : fallOnlyMode
-                  ? "Test fall detection indoors with a controlled staged movement."
-                  : "Start monitoring to analyze the trail from the live camera."}
-            </Text>
-          </View>
+          {sosActive ? (
+            // Frame S3 status zone, under the banner, until the SOS is cancelled.
+            <View style={[styles.statusCard, styles.statusCardSos]}>
+              <Text style={[styles.eyebrow, styles.sosText]}>SOS</Text>
+              <Text style={[lowVision ? styles.lowVisionText : styles.statusTitle, styles.sosText]}>{SOS_TEXT}</Text>
+            </View>
+          ) : (
+            <View style={styles.statusCard}>
+              <Text style={styles.eyebrow}>
+                {lowVision ? "LOW-VISION VIEW" : fallOnlyMode ? "FALL TEST" : "HIKE STATUS"}
+              </Text>
+              <Text accessibilityLiveRegion="polite" style={lowVision ? styles.lowVisionText : styles.statusTitle}>
+                {statusTitle}
+              </Text>
+              <Text style={styles.statusBody}>
+                {live
+                  ? captureStatus
+                  : fallOnlyMode
+                    ? "Test fall detection indoors with a controlled staged movement."
+                    : "Start monitoring to analyze the trail from the live camera."}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.previewCard}>
             <View style={styles.previewHeader}>
@@ -473,7 +521,26 @@ export default function HikerScreen() {
                 </Text>
               ) : null}
             </View>
-            <ActionButton label="Preview fall check-in" onPress={startCheckinPreview} secondary />
+            {__DEV__ ? (
+              <View style={styles.devCard}>
+                <Text style={styles.sectionTitle}>Developer: test check-in</Text>
+                <ControlRow
+                  label="Real SOS"
+                  value={realSos}
+                  onChange={setRealSos}
+                  subtitle={
+                    realSos
+                      ? "On: calls the backend, which can phone the emergency contact"
+                      : "Off: fake SOS, nobody is contacted"
+                  }
+                />
+                <ActionButton
+                  label={realSos ? "Test check-in (real SOS)" : "Test check-in (fake SOS)"}
+                  onPress={startDevCheckin}
+                  secondary
+                />
+              </View>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: "/share/[session_id]", params: { session_id: sessionId } })}
@@ -498,6 +565,11 @@ function deleteRecordedClip(uri: string) {
 
 function KeepCameraAwake() {
   useKeepAwake("trailsense-live-camera", { suppressDeactivateWarnings: true });
+  return null;
+}
+
+function KeepCheckinAwake() {
+  useKeepAwake("trailsense-checkin", { suppressDeactivateWarnings: true });
   return null;
 }
 
@@ -526,37 +598,46 @@ function ControlRow({
   subtitle?: string;
   disabled?: boolean;
 }) {
+  const description = subtitle ?? (value ? "Large high-contrast guidance" : "Standard guidance view");
+  // The whole row toggles, so the hit area is the row (76 tall), not just the small switch.
   return (
-    <View style={styles.controlRow}>
-      <View>
+    <Pressable
+      accessibilityRole="switch"
+      accessibilityLabel={label}
+      accessibilityHint={description}
+      accessibilityState={{ checked: value, disabled }}
+      disabled={disabled}
+      onPress={() => onChange(!value)}
+      style={styles.controlRow}
+    >
+      <View style={styles.controlText}>
         <Text style={styles.rowTitle}>{label}</Text>
-        <Text style={styles.rowSubtitle}>
-          {subtitle ?? (value ? "Large high-contrast guidance" : "Standard guidance view")}
-        </Text>
+        <Text style={styles.rowSubtitle}>{description}</Text>
       </View>
       <Switch
-        accessibilityLabel={label}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
         value={value}
         onValueChange={onChange}
         disabled={disabled}
         trackColor={{ false: COLORS.divider, true: COLORS.accent }}
         thumbColor={COLORS.text}
       />
-    </View>
+    </Pressable>
   );
 }
 
 const COLORS = {
-  bg: "#0B1410",
-  surface: "#13201A",
-  surfaceRaised: "#1B2C23",
-  divider: "#2A3F33",
-  text: "#F2F5F0",
-  muted: "#AEBBB2",
-  accent: "#1B5A38",
-  bright: "#5FC98A",
-  warning: "#FFD60A",
-  dark: "#000000",
+  bg: colors.bg,
+  surface: colors.surface,
+  surfaceRaised: colors.surface2,
+  divider: colors.divider,
+  text: colors.text,
+  muted: colors.textMuted,
+  accent: colors.accent,
+  bright: colors.accentBright,
+  warning: colors.sosBg,
+  dark: colors.sosFg,
 };
 
 const styles = StyleSheet.create({
@@ -582,13 +663,14 @@ const styles = StyleSheet.create({
   previewText: { color: COLORS.text, fontSize: 18, fontWeight: "700", textAlign: "center", marginTop: 8 },
   previewHint: { color: COLORS.muted, fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 6 },
   actionRow: { flexDirection: "row", padding: 12, gap: 10 },
-  actionButton: { minHeight: 56, minWidth: 64, flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 14, borderRadius: 14, backgroundColor: COLORS.accent },
+  actionButton: { minHeight: 64, minWidth: 64, flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 14, borderRadius: 14, backgroundColor: COLORS.accent },
   actionButtonSecondary: { backgroundColor: COLORS.surfaceRaised, borderWidth: 1, borderColor: COLORS.divider },
   actionButtonText: { color: COLORS.text, fontSize: 16, fontWeight: "700", textAlign: "center" },
   actionButtonTextSecondary: { color: COLORS.bright },
   pressed: { opacity: 0.78 },
   controlsCard: { borderRadius: 18, backgroundColor: COLORS.surface, paddingHorizontal: 16 },
   controlRow: { minHeight: 76, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  controlText: { flex: 1 },
   rowButton: { minHeight: 76, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   rowTitle: { color: COLORS.text, fontSize: 17, fontWeight: "700" },
   rowSubtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
@@ -601,13 +683,9 @@ const styles = StyleSheet.create({
   fallTestCard: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
   fallStatus: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
   fallResult: { color: COLORS.bright, fontSize: 18, fontWeight: "800" },
-  shareButton: { minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 1, borderColor: COLORS.bright },
+  shareButton: { minHeight: 64, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 1, borderColor: COLORS.bright },
   shareButtonText: { color: COLORS.bright, fontSize: 16, fontWeight: "700" },
-  checkinOverlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.warning, paddingHorizontal: 24 },
-  checkinEyebrow: { color: COLORS.dark, textAlign: "center", fontSize: 12, fontWeight: "900", letterSpacing: 0.8 },
-  checkinTitle: { color: COLORS.dark, textAlign: "center", fontSize: 36, lineHeight: 42, fontWeight: "900", marginTop: 18 },
-  checkinBody: { color: COLORS.dark, textAlign: "center", fontSize: 18, lineHeight: 25, marginTop: 8 },
-  countdown: { color: COLORS.dark, fontSize: 104, lineHeight: 116, fontWeight: "900", marginVertical: 12 },
-  cancelButton: { minHeight: 64, width: "100%", alignItems: "center", justifyContent: "center", borderRadius: 16, backgroundColor: COLORS.dark, paddingHorizontal: 20 },
-  cancelButtonText: { color: COLORS.warning, fontSize: 19, fontWeight: "800" },
+  statusCardSos: { backgroundColor: COLORS.dark },
+  sosText: { color: COLORS.warning },
+  devCard: { gap: 4, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
 });

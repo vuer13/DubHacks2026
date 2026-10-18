@@ -11,10 +11,11 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
-    "lib/api.ts",
-    "lib/schema.ts",
-    "lib/format.ts",
-    "lib/session.ts",
+    "lib/**/*.ts",
+    "theme/**/*.ts",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "hooks/**/*.ts",
     "expo-env.d.ts",
     ".expo/types/**/*.ts"
   ]

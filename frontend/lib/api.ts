@@ -5,11 +5,65 @@ import type { ZodType } from "zod";
 import {
   ClipResponseSchema,
   FallCheckResponseSchema,
+  SosCancelRequestSchema,
+  SosCancelResponseSchema,
+  SosRequestSchema,
+  SosResponseSchema,
   type ClipResponse,
   type FallCheckResponse,
+  type SosCancelResponse,
+  type SosRequest,
+  type SosResponse,
 } from "@/lib/schema";
 
 const backendUrl = process.env.EXPO_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+// The backend gives Twilio 10 s, so allow for that plus the round trip.
+const SOS_TIMEOUT_MS = 20_000;
+
+/**
+ * POST /api/sos. Resolves with the backend's answer; `sent: false` means no
+ * call was placed (Twilio not configured, Twilio error, or already cancelled).
+ */
+export async function sendSos(request: SosRequest): Promise<SosResponse> {
+  return postJson("/api/sos", SosRequestSchema.parse(request), SosResponseSchema);
+}
+
+/** POST /api/sos/cancel. `cancelled: false` means a call had already been placed. */
+export async function cancelSos(sessionId: string): Promise<SosCancelResponse> {
+  return postJson(
+    "/api/sos/cancel",
+    SosCancelRequestSchema.parse({ session_id: sessionId }),
+    SosCancelResponseSchema,
+  );
+}
+
+async function postJson<T>(endpoint: string, body: unknown, schema: ZodType<T>): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SOS_TIMEOUT_MS);
+  try {
+    const response = await expoFetch(backendUrl + endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    const payload: unknown = await response.json();
+    if (!response.ok) {
+      const detail =
+        typeof payload === "object" && payload !== null && "detail" in payload && typeof payload.detail === "string"
+          ? payload.detail
+          : `Request failed (${response.status})`;
+      throw new Error(detail);
+    }
+    const parsed = schema.safeParse(payload);
+    if (!parsed.success) {
+      throw new Error(`Backend returned an invalid response from ${endpoint}`);
+    }
+    return parsed.data;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function analyzeLiveClip(
   uri: string,
