@@ -19,7 +19,8 @@ import { analyzeLiveClip, checkFallClip } from "@/lib/api";
 import { SOS_TEXT, sosBannerText } from "@/lib/checkin";
 import { emergencyContactPhone, openDialer } from "@/lib/native/dialer";
 import { createSessionId } from "@/lib/session";
-import { speakWarning, stopWarningSpeech } from "@/lib/voice/warnings";
+import { speakSign, speakWarning, stopWarningSpeech } from "@/lib/voice/warnings";
+import { buildSignReadout, SignReadoutHistory } from "@/lib/signReadout";
 import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
 import { colors } from "@/theme/tokens";
 
@@ -41,6 +42,7 @@ export default function HikerScreen() {
   const generationRef = useRef(0);
   const monitoringRef = useRef(false);
   const checkinTriggeredRef = useRef(false);
+  const signHistoryRef = useRef(new SignReadoutHistory());
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [sessionId] = useState(createSessionId);
@@ -53,6 +55,7 @@ export default function HikerScreen() {
   const [fallResult, setFallResult] = useState<FallCheckResponse | null>(null);
   const [fallCheckStatus, setFallCheckStatus] = useState("Waiting for live camera segments");
   const [notice, setNotice] = useState<string | null>(null);
+  const [lastSign, setLastSign] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState("Monitoring is off");
   // Dev only: off runs the whole SOS flow against a fake that contacts nobody.
   const [realSos, setRealSos] = useState(false);
@@ -90,6 +93,7 @@ export default function HikerScreen() {
   }, [startCheckin, stopMonitoringForCheckin]);
 
   const startDevCheckin = () => {
+    stopWarningSpeech();
     stopMonitoringForCheckin();
     setNotice(null);
     startCheckin("dev", realSos ? "real" : "fake");
@@ -173,6 +177,7 @@ export default function HikerScreen() {
 
           // Handle each result as it arrives so a positive fall result can
           // interrupt a hazard warning that is already being generated or spoken.
+          const signSourceStartedAt = Date.now();
           const hazardTask: Promise<ClipResponse | null> = hazardAssessmentDue
             ? analyzeLiveClip(current.uri, sessionId, current.sequence)
                 .then((response) => {
@@ -184,8 +189,29 @@ export default function HikerScreen() {
                       `Hazard check: count=${response.event.hazards.length} warning=${warning?.say ?? "none"} latency_ms=${response.event.latency_ms}`,
                       response.event.hazards,
                     );
+                    const readout = signHistoryRef.current.acceptsResult(signSourceStartedAt)
+                      ? buildSignReadout(response.event.sign)
+                      : null;
+                    if (readout && Date.now() - signSourceStartedAt <= 10_000) {
+                      setLastSign(readout.chunks.join(" "));
+                    }
                     if (warning && !checkinTriggeredRef.current) {
                       void speakWarning(warning.say);
+                    } else if (readout && !checkinTriggeredRef.current) {
+                      void speakSign(readout.chunks, {
+                        fingerprint: readout.fingerprint,
+                        isCurrent: () => isCurrent() && !checkinTriggeredRef.current,
+                        canStart: () => signHistoryRef.current.canRead(
+                          readout.fingerprint, signSourceStartedAt,
+                        ),
+                        onStart: () => undefined,
+                      }).then((completed) => {
+                        if (completed) {
+                          signHistoryRef.current.markFinished(
+                            readout.fingerprint,
+                          );
+                        }
+                      });
                     }
                   }
                   return response;
@@ -317,6 +343,8 @@ export default function HikerScreen() {
       generationRef.current += 1;
       monitoringRef.current = true;
       checkinTriggeredRef.current = false;
+      signHistoryRef.current.reset();
+      setLastSign(null);
       clipSequenceRef.current = 0;
       nextFallAssessmentSequenceRef.current = FALL_WINDOW_SEGMENTS - 1;
       nextHazardAssessmentSequenceRef.current = HAZARD_CHECK_STRIDE_SEGMENTS - 1;
@@ -373,6 +401,13 @@ export default function HikerScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {lastSign ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>Last sign detected</Text>
+              <Text style={styles.noticeText}>{lastSign}</Text>
+            </View>
+          ) : null}
+
           {notice ? (
             <View style={styles.notice}>
               <Text style={styles.noticeText}>{notice}</Text>
