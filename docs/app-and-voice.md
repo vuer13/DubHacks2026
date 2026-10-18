@@ -4,7 +4,7 @@ You own `frontend/`: the TrailSense app in React Native (Expo SDK 57, Expo Route
 
 Before you start: read [`shared-context.md`](./shared-context.md) and the ElevenLabs half of [`vendor-apis.md`](./vendor-apis.md).
 
-**Migration status.** The frontend is moving from Next.js to Expo in six phases (see the 2026-10-18 row in [`build-plan.md`](./build-plan.md)). Until Phase 6 lands, the Expo app lives in `frontend-native/` and `frontend/` is still the old Next.js app; read every `frontend/` path below as `frontend-native/` until then. The migration already builds the design system, the hiker screen and every screen state (including the fall check-in, SOS and low-vision screens), the state gallery at `/dev/states`, the share page, and typed wrappers for the device features. The B steps below wire those pieces to real data.
+**Migration status.** Expo Router is active in `frontend/`; the previous Next.js files are preserved under `frontend/legacy-web/`. The current hiker screen records repeated 3-second camera clips, sends them to `/api/clip`, and speaks returned warnings. Fall candidate detection, the two-window check-in, location sharing, and automatic SOS still need their B5 wiring.
 
 ## How you run it
 
@@ -140,6 +140,11 @@ Follow [`integration-and-demo.md`](./integration-and-demo.md). Your job is the f
 ---
 
 ## Step B5: live camera mode and fall check-in
+
+The repeated camera clip upload and live hazard analysis described in item 1 are
+implemented in `frontend/src/app/index.tsx` and `backend/perception/live.py`.
+The remaining steps below cover fall candidate detection and the check-in/SOS
+flow.
 
 The check-in, cancelled and SOS screens and their reducer actions already exist; `safetyEventToAction` maps the shared-context safety events onto them. This step decides when to start a check-in and talks to the backend.
 

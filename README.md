@@ -4,7 +4,8 @@ A hiking assistant for visually impaired hikers: phone camera in, Perceptron Mk1
 
 The app is React Native with Expo (SDK 57) and Expo Router: one codebase for the hiker app on iPhone and Android and the web share page for the emergency contact.
 
-> **Migration in progress.** The frontend is moving from Next.js to Expo in six phases. Until Phase 6 lands, the Expo app is in `frontend-native/` and `frontend/` is still the old Next.js app. Run the commands below in `frontend-native/` until then.
+The active app is React Native with Expo Router in `frontend/`. The previous
+Next.js implementation is kept under `frontend/legacy-web/` for reference.
 
 ## Prerequisites
 
@@ -29,7 +30,7 @@ Backend, from the repository root:
     python -m pip install --upgrade pip
     python -m pip install -r backend/requirements.txt
     cp backend/.env.example .env
-    uvicorn backend.main:app --reload --port 8000
+    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 Keep backend keys in the repository-root `.env` file. The backend loads only
 that file for local settings.
@@ -56,7 +57,15 @@ Run it one of three ways:
 - **Web share page**: `npx expo start --web`, then open
   `http://localhost:8081/share/demo`.
 
-Checks: `npm run check` runs the typecheck, token check and state checks.
+The app records repeated 3-second camera clips while monitoring is active. Each
+clip is sent to `POST /api/clip`; the backend analyzes a rolling six-second
+frame window with Perceptron and returns a validated hazard event. Camera
+recordings restart between clips, so there can be a short boundary gap. Uploads
+run while the next clip records; if analysis falls behind, the app keeps only
+the newest waiting clip instead of growing a queue. Keep the app open in the
+foreground during live monitoring. On a physical phone, the backend URL must
+use the Mac's Wi-Fi IP.
+
 The backend health check is at http://localhost:8000/health.
 API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio
 integrations, and they all live in the repository-root `.env`.
