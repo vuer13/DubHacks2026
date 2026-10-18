@@ -75,10 +75,10 @@ trailsense/
 
 ## Environment variables
 
-Create `backend/.env` and `frontend/.env.local` early, and commit `.env.example` files.
+Create the repository-root `.env` and `frontend/.env.local` early, and commit example files only.
 
 ```
-# backend/.env
+# repo-root .env
 PERCEPTRON_API_KEY=
 PERCEPTRON_MODEL=perceptron-mk1.5
 PERCEPTRON_BASE_URL=https://api.perceptron.inc/v1
