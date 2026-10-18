@@ -2,10 +2,16 @@
 
 A hiking assistant for visually impaired hikers: phone camera in, Perceptron Mk1.5 hazards and trail signs out, ElevenLabs voice warnings and questions, plus GPS share / fall check-in / SOS.
 
+The app is React Native with Expo (SDK 57) and Expo Router: one codebase for the hiker app on iPhone and Android and the web share page for the emergency contact.
+
+> **Migration in progress.** The frontend is moving from Next.js to Expo in six phases. Until Phase 6 lands, the Expo app is in `frontend-native/` and `frontend/` is still the old Next.js app. Run the commands below in `frontend-native/` until then.
+
 ## Prerequisites
 
 - Python 3.11
-- Node.js and npm
+- Node.js 22.13 or newer, and npm
+- On your phone: Expo Go from the App Store or Google Play (for UI work)
+- For the voice agent: Xcode (iPhone) or Android Studio, or an Expo account for cloud builds; see `frontend/docs/dev-build.md`
 - FFmpeg for the planned video clip processing. The current scaffold does not use it yet.
 
 On macOS with Homebrew, install the system tools with:
@@ -28,20 +34,37 @@ Backend, from the repository root:
 Keep backend keys in the repository-root `.env` file. The backend loads only
 that file for local settings.
 
-Frontend, in another terminal:
+App, in another terminal:
 
     cd frontend
     npm install
-    cp .env.example .env.local
-    npm run dev
+    cp .env.example .env
 
-Open http://localhost:3000. The backend health check is at http://localhost:8000/health.
+Set `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env` to your Mac's LAN IP
+(`http://192.168.x.x:8000`, find it with `ipconfig getifaddr en0`); on a phone,
+`localhost` means the phone. Put no keys in `frontend/.env`: every
+`EXPO_PUBLIC_` value is bundled into the app.
+
+Run it one of three ways:
+
+- **Expo Go** (UI work, no build): `npx expo start --go`, then scan the QR code
+  with the phone's camera (iPhone) or from Expo Go (Android). Phone and Mac on
+  the same Wi-Fi.
+- **Development build** (everything, including the voice agent): install the
+  TrailSense development build once (`frontend/docs/dev-build.md`), then
+  `npx expo start --dev-client` and open the TrailSense app.
+- **Web share page**: `npx expo start --web`, then open
+  `http://localhost:8081/share/demo`.
+
+Checks: `npm run check` runs the typecheck, token check and state checks.
+The backend health check is at http://localhost:8000/health.
 API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio
-integrations. Those integrations are placeholders in this scaffold.
+integrations, and they all live in the repository-root `.env`.
 
 ## Code ownership
 
-- Frontend: frontend/
+- Frontend (React Native app and web share page): frontend/
+- Voice routes for the app (proposed): backend/voice/
 - Perception backend: backend/perception/
 - Safety and navigation backend: backend/safety/ and backend/nav/
 - Shared backend entry point and models: backend/main.py and backend/models.py

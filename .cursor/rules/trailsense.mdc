@@ -9,7 +9,9 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
+
+The hiker uses the TrailSense app: one React Native codebase (Expo SDK 57, Expo Router) that runs on iPhone and Android and also builds the web share page the emergency contact opens in any browser. The ElevenLabs voice agent runs in an Expo development build; everything else also runs in Expo Go.
 
 The primary demo is a recorded trail video replayed with pre-computed events and pre-rendered speech. Live camera mode exists but is secondary.
 
@@ -117,26 +119,29 @@ All JSON. CORS open during development.
 | POST | `/api/fall/check` | multipart `clip`, `session_id` | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
 | POST | `/api/sos` | `{"session_id","reason","lat","lng","recent_events":[...]}` | `{"sent": true, "to": "+1..."}` | C |
 | POST | `/api/sos/cancel` | `{"session_id"}` | `{"cancelled": true}` | C |
+| GET | `/api/voice/token` | | `{"conversation_token": "..."}`. Calls ElevenLabs `GET /v1/convai/conversation/token?agent_id=...` with the server-side key; the app passes the token to the agent SDK (WebRTC). **Proposed 2026-10-18** | B |
+| POST | `/api/voice/tts` | `{"text"}` | `audio/mpeg`. Proxies ElevenLabs text to speech (`eleven_flash_v2_5`, mp3), cached by text hash under `backend/data/tts/`. Used for warnings, the pre-brief and sign readouts. **Proposed 2026-10-18** | B |
 
-Frontend routes (Next.js):
+The two voice endpoints used to be Next.js server routes. The React Native app has no server of its own and must never hold the ElevenLabs key, so they move to the backend in `backend/voice/`, owned by App/Voice. They need the whole team's agreement like any contract change. The app reads `/api/clip` uploads from `expo-camera`; confirm the container each platform records (Step B5) and that the backend's ffmpeg accepts it.
 
-| Path | What |
-|---|---|
-| `/` | Main hiker screen: video (file or camera), big status area, mic button |
-| `/share/[session_id]` | Live map pin and last events, for emergency contacts |
-| `/api/voice/token` | Server route. Calls ElevenLabs `GET /v1/convai/conversation/get-signed-url?agent_id=...` with the server-side API key and returns `{"signed_url"}` for the browser WebSocket. Valid 15 minutes. |
-| `/api/voice/tts` | Server route. `POST {"text"}` proxies ElevenLabs text to speech (`eleven_flash_v2_5`, mp3) and caches by text hash. Used for warnings, the pre-brief, and sign readouts. |
+App routes (Expo Router, `frontend/app/`):
+
+| Path | Runs on | What |
+|---|---|---|
+| `/` | iOS, Android | Main hiker screen: video (file or camera), big status area, mic button |
+| `/share/[session_id]` | Web build (any browser, no install) and in the app | Live map pin and last events, for emergency contacts |
+| `/dev/states` | Development only | Gallery of every hiker screen state, checked against `docs/design/png/` |
 
 ## Voice: two channels
 
 | Channel | Technology | Carries | Latency target |
 |---|---|---|---|
-| Warning | ElevenLabs text to speech via `/api/voice/tts`, pre-rendered mp3s under `frontend/public/demo/speech/` for the replay demo | `SpeakEvent.say`, `sign.say`, pre-brief, off-trail nudges, check-in countdown prompts | under 300 ms live, 0 ms replay |
-| Conversation | ElevenLabs Agent (`@elevenlabs/react`, WebSocket, signed URL) with client tools | Questions, fall check-in dialogue, SOS confirmation | normal agent turn |
+| Warning | ElevenLabs text to speech through the backend's `POST /api/voice/tts`, played with `expo-audio`; pre-rendered mp3s bundled in `frontend/assets/speech/` for the replay demo | `SpeakEvent.say`, `sign.say`, pre-brief, off-trail nudges, check-in countdown prompts | under 300 ms live, 0 ms replay |
+| Conversation | ElevenLabs Agent through `@elevenlabs/react-native` (LiveKit, WebRTC) with client tools, wrapped in `frontend/lib/native/voice.ts`; conversation token from `GET /api/voice/token`. Development build only | Questions, fall check-in dialogue, SOS confirmation | normal agent turn |
 
-Coordination rules: every spoken warning is also sent to the agent with `sendContextualUpdate("Warning spoken: <say>")` so it can answer follow-ups. A priority 3 warning calls `sendUserActivity()` and mutes agent output while the warning audio plays. If the text to speech route is unreachable, fall back to the browser `speechSynthesis` API; never drop a warning.
+Coordination rules: every spoken warning is also sent to the agent as a contextual update ("Warning spoken: <say>") so it can answer follow-ups. A priority 3 warning pauses or ducks agent output while the warning audio plays; the audio session is set up so warnings and earcons are always heard while an agent session is open. If the text to speech route is unreachable, fall back to on-device speech (`expo-speech`); never drop a warning. In Expo Go the agent is unavailable and the mic button says so; warnings still play.
 
-## Agent client tools (frontend declares in the ElevenLabs agent config and executes by calling the backend)
+## Agent client tools (declared in the ElevenLabs agent config; the app runs them in `frontend/lib/native/voice.ts` by calling the backend)
 
 | Tool | Calls | Agent says |
 |---|---|---|
@@ -144,12 +149,12 @@ Coordination rules: every spoken warning is also sent to the agent with `sendCon
 | `describe_surroundings` | POST `/api/describe` with the latest clip | Reads `scene` |
 | `read_sign` | POST `/api/read_sign` with the latest frame | Reads `sign.say`, then the lines if asked |
 | `where_am_i` | GET `/api/location/{id}` + `/api/trail/{id}/brief` | Distance covered, off-trail status |
-| `start_sos` | POST `/api/sos` | Confirms help was contacted |
+| `start_sos` | POST `/api/sos` | Confirms a call was placed to the emergency contact |
 | `cancel_sos` | POST `/api/sos/cancel` | Confirms cancellation |
 
 Tool names and parameter names are case-sensitive and must match the dashboard config exactly. The four question tools need "Wait for response" on; the two SOS tools return a confirmation string too.
 
-Agent system prompt (frontend owns it, keep it in `frontend/lib/voice/systemPrompt.ts` and push it with the `overrides.agent.prompt` option at session start; enable the System prompt override in the agent's Security tab):
+Agent system prompt (App/Voice owns it; the ElevenLabs dashboard copy is the one the agent uses, and `frontend/lib/native/systemPrompt.ts` keeps the same text so the app can push it as an override if the React Native SDK supports overrides):
 
 > You are TrailSense, a calm hiking guide for a blind hiker. Speak in short sentences. Hazard warnings are spoken by a separate channel; you receive them as context messages that start with "Warning spoken:". Do not repeat a warning unless the hiker asks. When asked a question, answer in two sentences or fewer, directions first using clock positions. Use get_hazards_ahead for "what's ahead", describe_surroundings for "what do you see", read_sign for any sign or marker, and where_am_i for location or progress. A message that starts with "[SYSTEM]" comes from the app, not the hiker; follow it exactly. If the hiker says anything that sounds like distress, call start_sos. If a fall check-in is active and the hiker speaks at all, call cancel_sos and tell them help is not being called. Never speculate about things you were not told.
 
@@ -184,7 +189,9 @@ Rules: one output constraint per request (json_schema, regex, or an annotation f
 ## Coding rules for all agents
 
 - Python: type hints, pydantic models for every schema above, `async` endpoints, `httpx` or the `perceptron` SDK for API calls, log every model call with latency to `backend/data/logs/`.
-- TypeScript: strict mode, no `any`, Zod schemas mirroring the pydantic models in `frontend/lib/schema.ts`.
+- TypeScript: strict mode, no `any`, Zod schemas in `frontend/lib/schema.ts` for everything that crosses the network, mirroring the pydantic models.
+- Frontend: React Native with Expo SDK 57 and Expo Router. Style with `StyleSheet` and `frontend/theme/tokens.ts` (no Tailwind, no NativeWind). Install packages with `npx expo install` so versions match the SDK. Native features go through the typed wrappers in `frontend/lib/native/`; the web build must never import native-only modules.
+- Never put an API key in the app. Every `EXPO_PUBLIC_` variable is bundled and readable by anyone; keys stay in the backend's `.env`.
 - No databases. In-memory dicts keyed by `session_id`, persisted to JSON files under `backend/data/sessions/` on each write.
 - Every endpoint has a curl example in a docstring or a comment.
 - Write a tiny test or script that proves each step works before moving on. Keep them in `backend/tests/` and `frontend/scripts/`.
