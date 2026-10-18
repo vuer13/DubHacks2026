@@ -63,4 +63,5 @@ Start here: [`docs/README.md`](./docs/README.md)
 | [App and voice](./docs/app-and-voice.md) | Frontend + voice |
 | [Safety and nav](./docs/safety-and-nav.md) | GPS, fall, SOS, footage |
 | [Integration and demo](./docs/integration-and-demo.md) | Wiring lanes together and demo prep |
+| [Design](./docs/design/README.md) | UI design handoff: tokens, components, state frames, glyphs |
 | [SCHEMA.md](./SCHEMA.md) | Shared event + API contract |

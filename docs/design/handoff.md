@@ -1,6 +1,6 @@
 # TrailSense design handoff
 
-TrailSense is a Next.js mobile web app for blind and low-vision hikers. The hiker listens; the screen exists for arm's-length glances, sighted teammates and judges. This page is the developer contract for the design in `design/` and `png/`: tokens, components, the data that drives every frame, and the glyph SVGs.
+TrailSense is a Next.js mobile web app for blind and low-vision hikers. The hiker listens; the screen exists for arm's-length glances, sighted teammates and judges. This page is the developer contract for the design in `source/project/` and `png/`: tokens, components, the data that drives every frame, and the glyph SVGs.
 
 Contents
 
@@ -178,34 +178,34 @@ type Health = { camera: boolean; model: boolean; backend: boolean; gps: boolean 
 type Mode = { live: boolean; lowVision: boolean; agent: "idle" | "listening" | "speaking" }
 ```
 
-Frame files are in `design/project/`; renders in `png/`.
+Frame source files are in `source/project/` and keep their original names, so the Source column below is the `.dc.html` file name. Renders are in `png/`, named by the state they show.
 
-| Frame | File | Driven by |
-| --- | --- | --- |
-| Design system sheet | Main | static |
-| 1 Idle | Hiker01Idle | no source loaded (`video == null && !mode.live`); StatusZone text "Ready. Tap the mic to talk." |
-| 2 Playing, trail clear | Hiker02Playing | video playing; last SpeakEvent older than 8 s renders `tone: "stale"`; latest `earcon == "clear"` shows the Trail clear line |
-| 3 Severity 1 | Hiker03Sev1 | SpeakEvent `priority 1` within the last 8 s: StatusZone `tone 1`, word "Note", check glyph; EventLogPanel `newCount` +1 |
-| 4 Severity 2 | Hiker04Sev2 | SpeakEvent `priority 2`: `tone 2`, word "Caution", triangle glyph |
-| 5 Severity 3 | Hiker05Sev3 | SpeakEvent `priority 3`: `tone 3`, word "STOP", 64px octagon beside the hero; the zone fills edge to edge |
-| 6 Fork with sign | Hiker06Fork | SpeakEvent `earcon == "fork"` plus a ClipEvent with `sign` inside 3 s: `tone "fork"`, SignCard from `sign.label`, `sign.direction`, `sign.distanceKm`, spoken line "Sign: `label`, `direction`, `distance` kilometres" |
-| 7 Agent listening | Hiker07Listening | `mode.agent == "listening"`: MicButton listening, TranscriptLine `speaker "hiker"` from the live ASR partial; StatusZone stays stale |
-| 8 Agent speaking | Hiker08Speaking | `mode.agent == "speaking"`: MicButton speaking, TranscriptLine `speaker "agent"` from the agent reply; hero drops to 40px |
-| 9 Event log expanded | Hiker09Log | EventLogPanel `expanded == true`; rows are the last 8 events, SpeakEvents keyed by `priority`, fork rows also carry `sign.lines` |
-| 10 Live mode | Hiker10Live | `mode.live == true`: MapView replaced by camera preview, Analysing chip while a frame is in flight, Live pill checked; latest `earcon == "clear"` fills the zone `tone "clear"` |
-| 11 Backend offline | Hiker11Offline | `health.backend == false`: HealthDot fail, StatusBanner offline "Working offline, pre-recorded warnings only.", MicButton unavailable |
-| 12 Session QR | Hiker12QR | frame 1 plus `session.shareUrl` present: QR tile and "Share this hike" link |
-| S1 Check-in started | Safe01CheckIn | SafetyEvent `fall_checkin_started`: full-screen cancel button, CountdownRing from `secondsLeft` (20), any tap or any speech cancels |
-| S2 Cancelled | Safe02Cancelled | SafetyEvent `fall_cancelled`: StatusZone `tone 1` "Cancelled. Help is not being called." for 3 s, then back to the previous state |
-| S3 SOS sent | Safe03SOS | SafetyEvent `sos_sent`: top StatusBanner sos "Help contacted at `sentAt`" with Cancel SOS, StatusZone `tone "sos"` "Calling for help now."; banner persists until the session ends or Cancel SOS is confirmed |
-| LV4 Trail clear | LV04Clear | `mode.lowVision && earcon == "clear"`: GuidanceGlyph `ahead`, text "Trail clear" |
-| LV5 Hazard left | LV05HazardLeft | `mode.lowVision && priority >= 2 && hazard.point.x < 400` (frame width 1280, hazard in the left third): GuidanceGlyph `steer-right`, text = `say` without the trailing ", stop". `x > 880` mirrors to `steer-left`. Between 400 and 880 use `stop` |
-| LV6 Stop | LV06Stop | `mode.lowVision && priority == 3`: GuidanceGlyph `stop`, text "Stop"; only the Low vision pill remains |
-| LV7 Fork | LV07Fork | `mode.lowVision && earcon == "fork"`: GuidanceGlyph `fork-right` or `fork-left` from `sign.direction`, text "Fork ahead, `direction`" |
-| Share, phone, normal | Share01MobileNormal | `GET /share/:session`: header from `session.id` and age of the last position, MapView from `track` and `position`, ShareEventList from the last 5 events, Call hiker from `session.phone` |
-| Share, phone, SOS | Share02MobileSOS | same, plus a `sos_sent` SafetyEvent in the session: top banner "SOS sent at `sentAt`. Emergency contact notified.", status dot red, SOS as the newest row |
-| Share, laptop, normal | Share03DesktopNormal | as the phone frame, two-column at 960px and above |
-| Share, laptop, SOS | Share04DesktopSOS | as the phone SOS frame |
+| Frame | Source | PNG | Driven by |
+| --- | --- | --- | --- |
+| Design system sheet | Main | [design-system-sheet.png](./png/design-system-sheet.png) | static |
+| 1 Idle | Hiker01Idle | [hiker-idle.png](./png/hiker-idle.png) | no source loaded (`video == null && !mode.live`); StatusZone text "Ready. Tap the mic to talk." |
+| 2 Playing, trail clear | Hiker02Playing | [hiker-playing-clear.png](./png/hiker-playing-clear.png) | video playing; last SpeakEvent older than 8 s renders `tone: "stale"`; latest `earcon == "clear"` shows the Trail clear line |
+| 3 Severity 1 | Hiker03Sev1 | [hiker-sev1-note.png](./png/hiker-sev1-note.png) | SpeakEvent `priority 1` within the last 8 s: StatusZone `tone 1`, word "Note", check glyph; EventLogPanel `newCount` +1 |
+| 4 Severity 2 | Hiker04Sev2 | [hiker-sev2-caution.png](./png/hiker-sev2-caution.png) | SpeakEvent `priority 2`: `tone 2`, word "Caution", triangle glyph |
+| 5 Severity 3 | Hiker05Sev3 | [hiker-sev3-stop.png](./png/hiker-sev3-stop.png) | SpeakEvent `priority 3`: `tone 3`, word "STOP", 64px octagon beside the hero; the zone fills edge to edge |
+| 6 Fork with sign | Hiker06Fork | [hiker-fork-sign.png](./png/hiker-fork-sign.png) | SpeakEvent `earcon == "fork"` plus a ClipEvent with `sign` inside 3 s: `tone "fork"`, SignCard from `sign.label`, `sign.direction`, `sign.distanceKm`, spoken line "Sign: `label`, `direction`, `distance` kilometres" |
+| 7 Agent listening | Hiker07Listening | [hiker-agent-listening.png](./png/hiker-agent-listening.png) | `mode.agent == "listening"`: MicButton listening, TranscriptLine `speaker "hiker"` from the live ASR partial; StatusZone stays stale |
+| 8 Agent speaking | Hiker08Speaking | [hiker-agent-speaking.png](./png/hiker-agent-speaking.png) | `mode.agent == "speaking"`: MicButton speaking, TranscriptLine `speaker "agent"` from the agent reply; hero drops to 40px |
+| 9 Event log expanded | Hiker09Log | [hiker-event-log-expanded.png](./png/hiker-event-log-expanded.png) | EventLogPanel `expanded == true`; rows are the last 8 events, SpeakEvents keyed by `priority`, fork rows also carry `sign.lines` |
+| 10 Live mode | Hiker10Live | [hiker-live-mode.png](./png/hiker-live-mode.png) | `mode.live == true`: MapView replaced by camera preview, Analysing chip while a frame is in flight, Live pill checked; latest `earcon == "clear"` fills the zone `tone "clear"` |
+| 11 Backend offline | Hiker11Offline | [hiker-backend-offline.png](./png/hiker-backend-offline.png) | `health.backend == false`: HealthDot fail, StatusBanner offline "Working offline, pre-recorded warnings only.", MicButton unavailable |
+| 12 Session QR | Hiker12QR | [hiker-session-qr.png](./png/hiker-session-qr.png) | frame 1 plus `session.shareUrl` present: QR tile and "Share this hike" link |
+| S1 Check-in started | Safe01CheckIn | [safety-checkin-started.png](./png/safety-checkin-started.png) | SafetyEvent `fall_checkin_started`: full-screen cancel button, CountdownRing from `secondsLeft` (20), any tap or any speech cancels |
+| S2 Cancelled | Safe02Cancelled | [safety-checkin-cancelled.png](./png/safety-checkin-cancelled.png) | SafetyEvent `fall_cancelled`: StatusZone `tone 1` "Cancelled. Help is not being called." for 3 s, then back to the previous state |
+| S3 SOS sent | Safe03SOS | [safety-sos-sent.png](./png/safety-sos-sent.png) | SafetyEvent `sos_sent`: top StatusBanner sos "Help contacted at `sentAt`" with Cancel SOS, StatusZone `tone "sos"` "Calling for help now."; banner persists until the session ends or Cancel SOS is confirmed |
+| LV4 Trail clear | LV04Clear | [lowvision-clear.png](./png/lowvision-clear.png) | `mode.lowVision && earcon == "clear"`: GuidanceGlyph `ahead`, text "Trail clear" |
+| LV5 Hazard left | LV05HazardLeft | [lowvision-hazard-left.png](./png/lowvision-hazard-left.png) | `mode.lowVision && priority >= 2 && hazard.point.x < 400` (frame width 1280, hazard in the left third): GuidanceGlyph `steer-right`, text = `say` without the trailing ", stop". `x > 880` mirrors to `steer-left`. Between 400 and 880 use `stop` |
+| LV6 Stop | LV06Stop | [lowvision-stop.png](./png/lowvision-stop.png) | `mode.lowVision && priority == 3`: GuidanceGlyph `stop`, text "Stop"; only the Low vision pill remains |
+| LV7 Fork | LV07Fork | [lowvision-fork.png](./png/lowvision-fork.png) | `mode.lowVision && earcon == "fork"`: GuidanceGlyph `fork-right` or `fork-left` from `sign.direction`, text "Fork ahead, `direction`" |
+| Share, phone, normal | Share01MobileNormal | [share-mobile-normal.png](./png/share-mobile-normal.png) | `GET /share/:session`: header from `session.id` and age of the last position, MapView from `track` and `position`, ShareEventList from the last 5 events, Call hiker from `session.phone` |
+| Share, phone, SOS | Share02MobileSOS | [share-mobile-sos.png](./png/share-mobile-sos.png) | same, plus a `sos_sent` SafetyEvent in the session: top banner "SOS sent at `sentAt`. Emergency contact notified.", status dot red, SOS as the newest row |
+| Share, laptop, normal | Share03DesktopNormal | [share-desktop-normal.png](./png/share-desktop-normal.png) | as the phone frame, two-column at 960px and above |
+| Share, laptop, SOS | Share04DesktopSOS | [share-desktop-sos.png](./png/share-desktop-sos.png) | as the phone SOS frame |
 
 Rules that cut across frames: a new SpeakEvent replaces the hero immediately (assertive live region); the severity fill lasts 8 s then falls back to stale; `priority 3` and `sos_sent` are never auto-dismissed while the hazard is still detected; the Low vision pill is always rendered so the mode can be left.
 
@@ -250,7 +250,7 @@ Fork, take the right branch (LV7). Stem 24px, the branch not taken 12px, the bra
 </svg>
 ```
 
-Small 24-unit icons used in swatches and buttons (stroke 2.4, round caps and joins, `currentColor`): check `M5 12l5 5L20 7`; caution triangle `M12 3L22 20H2z M12 10v4 M12 17.5h.01`; stop octagon `M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9z M12 8v5 M12 16.5h.01`; fork `M12 21v-8 M12 13L6 6 M12 13l6-7`; mic `rect 9,3 6x11 rx3; M5 11a7 7 0 0 0 14 0; M12 18v3`; waveform `M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 10v4`; alert circle `circle 12,12 r9; M12 7v6; M12 16.5h.01`. The same files are in `glyphs/`.
+Small 24-unit icons used in swatches and buttons (stroke 2.4, round caps and joins, `currentColor`): check `M5 12l5 5L20 7`; caution triangle `M12 3L22 20H2z M12 10v4 M12 17.5h.01`; stop octagon `M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9z M12 8v5 M12 16.5h.01`; fork `M12 21v-8 M12 13L6 6 M12 13l6-7`; mic `rect 9,3 6x11 rx3; M5 11a7 7 0 0 0 14 0; M12 18v3`; waveform `M4 10v4 M8 7v10 M12 4v16 M16 8v8 M20 10v4`; alert circle `circle 12,12 r9; M12 7v6; M12 16.5h.01`. The same files are in `frontend/public/glyphs/` (`arrow-ahead.svg`, `arrow-steer-right.svg`, `stop.svg`, `fork-right.svg`), served at `/glyphs/<name>.svg`.
 
 ## 5. Accessibility rules
 
@@ -259,11 +259,11 @@ Every control is a native button, switch or link with an aria-label that says wh
 ## 6. Files in this package
 
 ```
-design/project/canvas.json          canvas index: frame positions, titles, annotation stickies
-design/project/*.dc.html            one self-contained HTML file per frame (inline styles, inline SVG)
-png/*.png                           2x renders of every frame (phone 780 by 1688, laptop 2560 by 1600, sheet 2880 wide)
-glyphs/*.svg                        the four low-vision glyphs as standalone SVG
-HANDOFF.md                          this page
+source/project/canvas.json          canvas index: frame positions, titles, annotation stickies
+source/project/*.dc.html            one self-contained HTML file per frame (inline styles, inline SVG)
+png/*.png                           2x renders of every frame, named by state (phone 780 by 1688, laptop 2560 by 1600); the design system sheet is downscaled to 1920 wide, 64 colours, to stay under 500 KB
+frontend/public/glyphs/*.svg        the four low-vision glyphs as standalone SVG (repo path, moved out of this folder)
+handoff.md                          this page
 ```
 
 The `.dc.html` files render as plain HTML once the `<x-dc>`, `<helmet>` wrappers and the two script tags are removed; `png/` was produced that way with Playwright at `deviceScaleFactor: 2` and reduced motion on.

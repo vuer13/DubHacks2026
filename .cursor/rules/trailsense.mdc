@@ -190,3 +190,4 @@ Rules: one output constraint per request (json_schema, regex, or an annotation f
 - Write a tiny test or script that proves each step works before moving on. Keep them in `backend/tests/` and `frontend/scripts/`.
 - No em dashes in any user-facing text.
 - Never commit `.env` files or raw footage.
+- Frontend UI changes go on a step branch with a PR into front-end-feature-branch; one PR per step.

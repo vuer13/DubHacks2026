@@ -123,5 +123,6 @@ Work lanes in parallel. Rough dependency order:
 ## Rules for the whole team
 
 - Prefer small, frequent commits to `main`. Lanes touch different folders so conflicts are rare.
+- Frontend UI changes go on a step branch with a PR into front-end-feature-branch; one PR per step.
 - If a step is stuck, cut scope or cache a fake result in the agreed JSON shape and move on. The replay demo cannot tell the difference.
 - The schema in `shared-context.md` / `SCHEMA.md` is shared. Changes need all three people agreeing. The 2026-10-17 additions (`point`, `sign`, `/api/read_sign`, `read_sign` tool) are proposed and nullable; confirm them at the kickoff sync.
