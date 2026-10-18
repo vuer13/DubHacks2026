@@ -23,7 +23,7 @@ Run in this order. Everyone at one table, backend logs on one screen, the phone 
 3. "Use demo hike", play. Watch for: earcons before speech, priority 3 interrupting the agent mid-sentence, no repeated warnings, the sign readout after "Fork ahead", event log filling. Then turn on airplane mode and replay 30 seconds: warnings must still play.
 4. Mid-hike, ask by voice: "what's ahead?", "describe what you see", "read the sign", "where am I?". Each should answer in two sentences or fewer.
 5. Open the share page on a laptop; confirm the pin moves if you walk the phone around the room with geolocation on.
-6. Play `stumble.mp4`: nothing should fire. Play `fall.mp4`: check-in starts, countdown shows, stay silent, SMS arrives, share page shows the red banner. Replay `fall.mp4` and this time say "I'm fine" during the countdown: it cancels.
+6. Play `stumble.mp4`: nothing should fire. Play `fall.mp4`: after two consecutive positive fall windows, the check-in starts and countdown shows. Stay silent; SMS arrives and the share page shows the red banner. Replay `fall.mp4` and this time say "I'm fine" during the countdown: it cancels.
 7. Write down every failure in `demo/ISSUES.md` with an owner. Fix the top five before moving on. Anything else is cut or stubbed.
 
 Exit criteria: steps 2 to 6 work end to end at least once without a manual intervention. If they do not, drop live mode (Step B5) and spend more time here instead.
