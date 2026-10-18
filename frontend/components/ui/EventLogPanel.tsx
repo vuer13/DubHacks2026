@@ -29,7 +29,12 @@ export function EventLogPanel({ events, expanded, newCount, onToggle, ariaLabel 
       >
         <span>Event log</span>
         <span className="flex items-center gap-3 font-medium text-ts-text-muted">
-          <span>{events.length}</span>
+          {/* Frame 3: when every event is new, the header says "N new" in green; otherwise the count. */}
+          {newCount > 0 && newCount === events.length ? (
+            <span className="text-ts-accent-bright">{newCount} new</span>
+          ) : (
+            <span>{events.length}</span>
+          )}
           <Icon name={expanded ? "chevron-up" : "chevron-down"} />
         </span>
       </button>

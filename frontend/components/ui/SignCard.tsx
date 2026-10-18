@@ -3,7 +3,8 @@ import { Icon } from "@/components/ui/icons";
 export type SignCardProps = {
   label: string;
   direction: "left" | "right" | "ahead";
-  distanceKm: number;
+  /** Optional: the handoff's sign data marks distance optional; the card then shows the direction only. */
+  distanceKm?: number;
   /** The spoken readout; also the group's accessible name. */
   spoken: string;
   ariaLabel?: string;
@@ -11,9 +12,9 @@ export type SignCardProps = {
 
 const arrow = { left: "arrow-left", right: "arrow-right", ahead: "arrow-ahead" } as const;
 
-export function signDetail(direction: SignCardProps["direction"], distanceKm: number): string {
+export function signDetail(direction: SignCardProps["direction"], distanceKm?: number): string {
   const word = direction.charAt(0).toUpperCase() + direction.slice(1);
-  return word + ", " + distanceKm.toFixed(1) + " km";
+  return distanceKm === undefined ? word : word + ", " + distanceKm.toFixed(1) + " km";
 }
 
 export function SignCard({ label, direction, distanceKm, spoken, ariaLabel }: SignCardProps) {

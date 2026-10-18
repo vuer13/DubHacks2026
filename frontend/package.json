@@ -8,16 +8,19 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "check:tokens": "tsx scripts/check-tokens.ts",
-    "check:ui": "tsx --tsconfig scripts/tsconfig.json scripts/check-ui.tsx"
+    "check:ui": "tsx --tsconfig scripts/tsconfig.json scripts/check-ui.tsx",
+    "check:states": "tsx --tsconfig scripts/tsconfig.json scripts/check-states.ts"
   },
   "dependencies": {
     "next": "^14.2.15",
+    "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "autoprefixer": "^10.4.20",
