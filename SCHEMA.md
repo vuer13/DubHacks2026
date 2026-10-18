@@ -98,15 +98,18 @@ Source of truth: [`docs/shared-context.md`](./docs/shared-context.md). Change on
 | POST | `/api/fall/check` | C |
 | POST | `/api/sos` | C |
 | POST | `/api/sos/cancel` | C |
+| GET | `/api/voice/token` (proposed 2026-10-18) | B |
+| POST | `/api/voice/tts` (proposed 2026-10-18) | B |
 
-## Frontend routes
+The two voice endpoints moved from Next.js server routes to the backend because the React Native app must never hold the ElevenLabs key.
 
-| Path | What |
-|---|---|
-| `/` | Hiker screen |
-| `/share/[session_id]` | Live map for emergency contacts |
-| `/api/voice/token` | ElevenLabs signed URL for the agent WebSocket |
-| `/api/voice/tts` | ElevenLabs text to speech proxy with cache, for warnings |
+## App routes (Expo Router)
+
+| Path | Runs on | What |
+|---|---|---|
+| `/` | iOS, Android | Hiker screen |
+| `/share/[session_id]` | Web build and in the app | Live map for emergency contacts |
+| `/dev/states` | Development only | State gallery |
 
 ## Agent client tools (ElevenLabs)
 

@@ -8,7 +8,7 @@ Project docs for TrailSense.
 | [shared-context.md](./shared-context.md) | Schema, API contract, principles |
 | [vendor-apis.md](./vendor-apis.md) | Perceptron Mk1.5 and ElevenLabs API facts, with sources |
 | [perception.md](./perception.md) | Perception: Mk1.5, clip pipeline, grounding, signs, smoothing |
-| [app-and-voice.md](./app-and-voice.md) | App and voice: Next.js, ElevenLabs text to speech and Agent, replay |
+| [app-and-voice.md](./app-and-voice.md) | App and voice: React Native (Expo) app and web share page, ElevenLabs text to speech and Agent, replay |
 | [safety-and-nav.md](./safety-and-nav.md) | Safety and nav: GPS, fall, SOS, footage |
 | [integration-and-demo.md](./integration-and-demo.md) | Syncs, full-run checklist, demo script |
 | [Design](./design/README.md) | UI design handoff: tokens, components, state frames, glyphs |

@@ -11,25 +11,29 @@ Working name: **TrailSense**. Rename freely.
 | 2026-10-17 | Voice moves from xAI Grok Voice to ElevenLabs: text to speech for warnings, ElevenLabs Agent with client tools for questions. | Team decision. Warnings no longer pass through a language model, so they are faster and spoken verbatim. Replay demo uses pre-rendered mp3s and needs no voice network call. |
 | 2026-10-17 | Perception moves from Mk1 on OpenRouter to Mk1.5 on the Perceptron API. | Mk1.5 is the model Perceptron recommends as the starting point. It adds strict JSON schema output, regex output, pointing, clip events, video tracking, audio in video, and `reasoning_effort`. Hosted Isaac was retired on 2026-09-25. |
 | 2026-10-17 | Video input follows Perceptron's guidance. Continuous monitoring (live and the replay pipeline) sends a running window of the last 6 s of frames every 3 s. Batch jobs over the whole hike send frames or a contact sheet. `ClipEvent.t_start` and `t_end` now mean the window bounds. | Perceptron advised: "if you're trying to do continuous monitoring, I'd pass in a running context window of a few seconds. If batching, I'd pass in frames or a contact sheet." Overlapping windows let the model see motion toward a hazard. No schema shape change. |
+| 2026-10-18 | Frontend moves from Next.js to React Native with Expo and Expo Router: one codebase for the hiker app on iOS and Android and the web share page; ElevenLabs voice agent runs in an Expo development build. The ElevenLabs token and text to speech routes move from Next.js server routes to the backend as `GET /api/voice/token` and `POST /api/voice/tts` (proposed, App/Voice owns `backend/voice/`). | Native camera, sensors, haptics, keep-awake and background-safe audio, plus a real installed app for blind users. The app cannot hold the ElevenLabs key, so the two voice routes need a server; the backend already holds the other keys. Migration runs in six phases; until Phase 6 lands the Expo app lives in `frontend-native/` and `frontend/` is still the old Next.js app. |
 | 2026-10-17 | New: trail sign reading (OCR) as a voice tool and an automatic readout at forks. Two optional schema fields (`Hazard.point`, `ClipEvent.sign`) and one endpoint (`POST /api/read_sign`). | Perceptron's smart glasses demo uses OCR and web search to add context to what the wearer sees. Signs are the trail equivalent. Additive and nullable, so nothing built so far breaks. Needs all three people to agree before code lands. |
 
 ## Tech stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | Next.js 14 (App Router), TypeScript, Tailwind | Runs on any phone browser, no app store, fast to iterate |
+| Frontend | React Native 0.86 with Expo SDK 57 and Expo Router, TypeScript strict, `StyleSheet` with `frontend/theme/tokens.ts` | One codebase for the iOS and Android hiker app and the web share page. Native camera, sensors, haptics, keep-awake and audio, and a real installed app that works with VoiceOver and TalkBack |
+| Dev loop | Expo Go for UI work; an Expo development build (`expo-dev-client`) for the voice agent | Expo Go reloads instantly with no build; the agent's WebRTC native code needs a development build |
+| Share page | Expo Router web output from the same codebase, hosted (EAS Hosting, set up in migration Phase 5) | The emergency contact opens a link in any browser; nothing to install |
+| Device features | `expo-camera`, `expo-video`, `expo-audio`, `expo-haptics`, `expo-location`, `expo-sensors`, `expo-keep-awake`, wrapped in `frontend/lib/native/` | Typed wrappers so the B steps call one API, and the web build never imports them |
 | Backend | Python 3.11, FastAPI, uvicorn | Easy ffmpeg, OpenCV and numpy work; async for model calls |
 | Perception | Perceptron Mk1.5 on the Perceptron API (`perceptron-mk1.5`, `pip install "perceptron>=0.4.0"`) | Video in, strict JSON out, pointing and OCR on the same model, cheap enough to call every 3 s on a running 6 s window of frames ($0.15/M in, $1.50/M out) |
 | Perception fallback | Same model through OpenRouter (`perceptron/perceptron-mk1.5`) | Only if the direct API has an outage. OpenRouter may not pass `vision_config` or `response_format` through, so the fallback is plain JSON prompting with validation and retry |
 | Perception (stretch) | Mk1.5 video tracking, offline, on the recorded hike | Trail-centre track for a guidance arrow. Replaces the old Isaac plan; hosted Isaac is retired and Isaac 0.5 is a robot-action model |
-| Voice: warnings | ElevenLabs text to speech, `eleven_flash_v2_5` (about 75 ms), via a Next.js server route with a disk cache; pre-rendered mp3s for the demo | Verbatim, fast, no language model in the loop |
-| Voice: conversation | ElevenLabs Agent, `@elevenlabs/react`, WebSocket with a server-minted signed URL, client tools | Speech in and out, turn-taking and interruption handled by the platform, tools run in the browser against our backend |
+| Voice: warnings | ElevenLabs text to speech, `eleven_flash_v2_5` (about 75 ms), through the backend's `POST /api/voice/tts` with a disk cache; pre-rendered mp3s bundled in the app for the demo; `expo-speech` as the offline fallback | Verbatim, fast, no language model in the loop, and the key never reaches the phone |
+| Voice: conversation | ElevenLabs Agent through `@elevenlabs/react-native` (LiveKit, WebRTC) with client tools; conversation token from the backend's `GET /api/voice/token` | Speech in and out, turn-taking and interruption handled by the platform, tools run in the app against our backend. Development build only |
 | Fall detection | numpy + OpenCV frame differencing, Mk1.5 confirmation with audio enabled, agent voice check-in | No training needed |
-| Location | Browser Geolocation API, gpxpy on the backend | Off-trail drift from a GPX file |
+| Location | `expo-location` foreground tracking, gpxpy on the backend | Off-trail drift from a GPX file |
 | SOS | Twilio Voice call with spoken alert | One API call |
 | Video tooling | ffmpeg | Clip slicing, frame extraction |
 | Storage | JSON files on disk, in-memory dicts | Keep persistence simple; no database required |
-| Tunnel | ngrok (backend) + Vercel or ngrok (frontend) | Phone must reach the backend over HTTPS for camera and mic permissions |
+| Tunnel | Backend reached by LAN IP on the same Wi-Fi, or ngrok when it is not; share site hosted | A native app needs no HTTPS for camera or mic. Expo Go and debug builds allow plain http to a LAN IP; use the ngrok https URL across networks and for release builds |
 
 ## Team lanes
 
@@ -38,7 +42,7 @@ Use whatever coding tool you want. Lanes are about ownership, not tools.
 | Person | Lane | Owns |
 |---|---|---|
 | Person A | Perception | `backend/perception/`, Mk1.5 prompts and schemas, clip pipeline, grounding pass, sign reading, smoothing, `events.json` |
-| Person B | App and voice | `frontend/`, video player, replay engine, ElevenLabs agent and text to speech routes, speech cache and pre-render script, earcons, haptics |
+| Person B | App and voice | `frontend/` (React Native app and web share page), `backend/voice/` (proposed token and text to speech routes), video player, replay engine, ElevenLabs agent, speech cache and pre-render script, earcons, haptics, development builds |
 | Person C | Safety and nav | `backend/safety/`, `backend/nav/`, fall detector, Twilio SOS, GPX, share page API, trail footage, demo timestamps |
 
 ## Repo layout
@@ -62,21 +66,27 @@ trailsense/
     nav/                            <- Safety and nav
     data/                           <- clips, events.json, gpx, session logs
     requirements.txt
-  frontend/                         <- App and voice
+    voice/                          <- App/Voice: /api/voice/token and /api/voice/tts (proposed)
+  frontend/                         <- App and voice: React Native, Expo SDK 57, Expo Router
     app/
-      api/voice/token/route.ts      <- ElevenLabs signed URL
-      api/voice/tts/route.ts        <- ElevenLabs text to speech proxy + cache
-    lib/
-    public/sounds/
-    public/demo/speech/             <- pre-rendered warning mp3s (committed, small)
-    scripts/prerender-speech.ts     <- builds public/demo/speech from a job's speak list
+      index.tsx                     <- hiker screen (iOS, Android)
+      share/[session_id].tsx        <- emergency contact page (web build, also in the app)
+      dev/states.tsx                <- dev-only gallery of every screen state
+    components/                     <- design system and hiker screen components
+    lib/                            <- schema, api, session, reducer, fixtures, low-vision logic
+      native/                       <- typed wrappers: audio, haptics, clip recorder, location, motion, voice
+    theme/tokens.ts                 <- design tokens, generated from docs/design/handoff.md
+    assets/speech/                  <- pre-rendered warning mp3s (committed, small)
+    assets/sounds/                  <- earcon sound files
+    scripts/                        <- check-tokens, check-states, prerender-speech
+    docs/dev-build.md               <- development build setup and the daily loop
   footage/                          <- raw trail videos (gitignored)
   demo/                             <- demo script, cached events
 ```
 
 ## Environment variables
 
-Create the repository-root `.env` and `frontend/.env.local` early, and commit example files only.
+Create the repository-root `.env` and `frontend/.env` early, and commit example files only. Every key stays in the repository-root `.env` the backend reads. Nothing secret goes in `frontend/.env`: every `EXPO_PUBLIC_` value is bundled into the app and the web build.
 
 ```
 # repo-root .env
@@ -88,27 +98,29 @@ TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_FROM_NUMBER=
 EMERGENCY_CONTACT_NUMBER=
-SHARE_BASE_URL=https://<frontend-host>
-
-# frontend/.env.local
-NEXT_PUBLIC_BACKEND_URL=https://<ngrok-id>.ngrok.app
-ELEVENLABS_API_KEY=          # server side only; never NEXT_PUBLIC_
+SHARE_BASE_URL=https://<share-site-host>   # the hosted web share page
+ELEVENLABS_API_KEY=          # backend only; used by /api/voice/token and /api/voice/tts
 ELEVENLABS_AGENT_ID=
 ELEVENLABS_VOICE_ID=
 ELEVENLABS_TTS_MODEL=eleven_flash_v2_5
+
+# frontend/.env (public: bundled into the app and web build)
+EXPO_PUBLIC_BACKEND_URL=http://192.168.x.x:8000   # Mac's LAN IP, or the backend's ngrok https URL
+EXPO_PUBLIC_SHARE_BASE_URL=https://<share-site-host>
+EXPO_PUBLIC_HIKER_PHONE=      # shown as the share page's Call hiker link
 ```
 
 ## Suggested build order
 
 Work lanes in parallel. Rough dependency order:
 
-1. **Skeleton**: repo, env, FastAPI + Next.js boots, health check green; Safety/Nav records trail footage; App/Voice creates the ElevenLabs agent in the dashboard
+1. **Skeleton**: repo, env, FastAPI boots, the Expo app opens in Expo Go with a green health dot; Safety/Nav records trail footage; App/Voice creates the ElevenLabs agent in the dashboard and installs the development build on the demo phone
 2. **Core loops**: one valid Mk1.5 hazard JSON with strict schema output; ElevenLabs text to speech says "Drop-off, left, stop" on the phone; agent says hello; location logging
 3. **Pipelines**: video to `events.json`; replay engine on fake then real events with pre-rendered speech; GPX / off-trail / share API
 4. **Safety + voice tools**: smoothing + live clip endpoints; grounding pass for direction; agent client tools; earcons; haptics; fall detector + SOS
 5. **Integration**: full recorded hike end to end ([integration-and-demo.md](./integration-and-demo.md))
 6. **Polish**: prompt tuning, sign reading at the fork, live camera, fall check-in UX, pre-brief, low-vision mode, pitch deck
-7. **Rehearsal**: run the demo script, cache events and speech under `demo/` and `frontend/public/demo/`
+7. **Rehearsal**: run the demo script on the development build, cache events under `demo/` and speech under `frontend/assets/speech/`
 
 ## How to use these docs
 

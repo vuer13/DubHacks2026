@@ -92,9 +92,12 @@ The smart glasses example Perceptron published (navigation with OCR and web sear
 - WebSocket stream: `wss://api.elevenlabs.io/v1/text-to-speech/{voice_id}/stream-input?model_id=...`. First message `{"text": " ", "voice_settings": ..., "xi-api-key": ...}`, then `{"text": "Drop-off, left, stop ", "flush": true}`, then `{"text": ""}` to close. Returns base64 audio chunks. Only worth it for live mode if REST latency is a problem.
 - Models: `eleven_flash_v2_5` is the lowest latency (about 75 ms). `eleven_multilingual_v2` is the default and slower. Confirm the current list with `GET /v1/models`.
 - Voice settings: `stability` 0.5, `similarity_boost` 0.75, `speed` 1.0 are defaults. For warnings try `stability` 0.7 and `speed` 1.1 so the voice is flat and quick.
-- Keep the API key on the server. The browser calls our `/api/voice/tts` route.
+- Keep the API key on the server. The app calls the backend's `POST /api/voice/tts`, which holds the key and caches the mp3.
 
-### Agent (conversation)
+### Agent (conversation), web SDK
+
+This is the browser SDK the Next.js app planned to use; kept for reference. The TrailSense app uses the React Native SDK in the next section.
+
 
 - Packages: `@elevenlabs/react` (hook `useConversation`, needs a `ConversationProvider`) or `@elevenlabs/client` (`Conversation.startSession`).
 - Auth for a private agent: server calls `GET https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=...` with `xi-api-key`, gets `{"signed_url": "wss://..."}`, valid 15 minutes. Browser passes `signedUrl` to `startSession` with `connectionType: "websocket"`. WebRTC uses a conversation token from the token endpoint instead; WebSocket is enough for us.
@@ -103,6 +106,15 @@ The smart glasses example Perceptron published (navigation with OCR and web sear
 - Callbacks: `onMessage` (user transcripts tentative or final, agent replies), `onModeChange` (`speaking` or `listening`), `onStatusChange`, `onError`.
 - Client tools: in the dashboard, Tool Type "Client", same `name`, `description`, and parameters as the code. Turn on "Wait for response" so the agent waits for the return value. Names are case-sensitive.
 - Interruption: the platform's turn-taking model handles barge-in; when the hiker talks over the agent the agent stops. We do not need our own cancel.
+
+### Agent in React Native (the TrailSense app)
+
+- Packages: `@elevenlabs/react-native` plus its peers `@livekit/react-native`, `@livekit/react-native-webrtc` and `livekit-client`. It connects over WebRTC (LiveKit).
+- It does not work in Expo Go; it needs a development build. TrailSense loads it lazily in `frontend/lib/native/voice.ts` and skips it in Expo Go.
+- API: wrap the app in `ConversationProvider`, then use `useConversation` (`startSession`, `endSession`, `status`, `isSpeaking`, callbacks `onConnect`, `onDisconnect`, `onMessage`, `onError`). Finer hooks exist, including `useConversationMode`, `useConversationInput` and `useConversationClientTool` for registering client tools.
+- Auth for a private agent over WebRTC: the backend calls `GET https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=...` with the API key and returns `{"token", "conversation_id"}`; the app passes the token to `startSession`. The signed URL above is for WebSocket clients.
+- Permissions: microphone (iOS `NSMicrophoneUsageDescription`, Android `RECORD_AUDIO`, requested at runtime on Android before a session starts).
+- Not stated on the SDK page, to confirm in migration Phase 4 before relying on them: the Expo config plugins to add to `app.json`, the token's lifetime, and whether `sendContextualUpdate`, `sendUserActivity` and overrides exist under those names.
 
 ## Sources
 
@@ -114,6 +126,8 @@ The smart glasses example Perceptron published (navigation with OCR and web sear
 - OpenRouter listing: https://openrouter.ai/perceptron/perceptron-mk1.5
 - ElevenLabs React SDK: https://elevenlabs.io/docs/eleven-agents/libraries/react
 - ElevenLabs JavaScript SDK: https://elevenlabs.io/docs/eleven-agents/libraries/java-script
+- ElevenLabs React Native SDK: https://elevenlabs.io/docs/eleven-agents/libraries/react-native
+- ElevenLabs conversation token (WebRTC): https://elevenlabs.io/docs/eleven-agents/api-reference/conversations/get-webrtc-token
 - ElevenLabs agent authentication: https://elevenlabs.io/docs/eleven-agents/customization/authentication
 - ElevenLabs client tools: https://elevenlabs.io/docs/eleven-agents/customization/tools/client-tools
 - ElevenLabs overrides: https://elevenlabs.io/docs/eleven-agents/customization/personalization/overrides
