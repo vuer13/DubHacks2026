@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TrailSense hiker screen, idle with session QR</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B1410}
+a{color:#5FC98A}a:hover{color:#9ED8AE}
+:focus-visible{outline:3px solid #F2F5F0;outline-offset:3px;border-radius:inherit}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0B1410; color: #F2F5F0; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div style="display: flex; align-items: center; justify-content: space-between; height: 52px; padding: 8px 16px 0; box-sizing: border-box; flex-shrink: 0">
+<span style="font-size: 20px; line-height: 26px; font-weight: 600; color: #AEBBB2">TrailSense</span>
+<span role="img" aria-label="All systems healthy" style="width: 16px; height: 16px; border-radius: 50%; background: #4CC37A"></span>
+</div>
+
+<div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; width: 390px; height: 219px; flex-shrink: 0; background: #13201A; box-sizing: border-box; padding: 16px">
+<button type="button" aria-label="Use the demo hike" style="display: flex; align-items: center; justify-content: center; width: 280px; min-height: 64px; border-radius: 16px; background: #1B5A38; border: 3px solid #1B5A38; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer; box-sizing: border-box">Use demo hike</button>
+<button type="button" aria-label="Load a video from this phone" style="display: flex; align-items: center; justify-content: center; width: 280px; min-height: 64px; border-radius: 16px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer; box-sizing: border-box">Load video</button>
+</div>
+
+<button type="button" aria-expanded="false" aria-label="Event log, no events, collapsed" style="display: flex; align-items: center; justify-content: space-between; width: 100%; height: 64px; padding: 0 16px; box-sizing: border-box; background: #0B1410; border: 0; border-bottom: 2px solid #2A3F33; color: #F2F5F0; font: inherit; font-size: 20px; font-weight: 600; cursor: pointer; flex-shrink: 0; text-align: left">
+<span>Event log</span>
+<span style="display: flex; align-items: center; gap: 12px; color: #AEBBB2; font-weight: 500"><span>0</span><svg aria-hidden="true" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"></path></svg></span>
+</button>
+
+<div style="flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 16px; padding: 24px 16px; box-sizing: border-box; min-height: 0">
+<p aria-live="assertive" aria-atomic="true" style="margin: 0; font-size: 56px; line-height: 1.05; font-weight: 700; letter-spacing: -0.015em; text-wrap: balance">Ready. Tap the mic to talk.</p>
+<div style="display: flex; justify-content: flex-end">
+<a href="#share" aria-label="Share this hike, opens the share page" style="display: flex; align-items: center; gap: 12px; text-decoration: none; color: #5FC98A">
+<span style="font-size: 18px; line-height: 24px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px">Share this hike</span>
+<span aria-hidden="true" style="width: 96px; height: 96px; padding: 8px; box-sizing: border-box; border-radius: 12px; background: #F2F5F0; display: flex; flex-shrink: 0"><svg width="80" height="80" viewBox="0 0 21 21" shape-rendering="crispEdges"><path fill="#000000" d="M0 0h1v1h-1zM1 0h1v1h-1zM2 0h1v1h-1zM3 0h1v1h-1zM4 0h1v1h-1zM5 0h1v1h-1zM6 0h1v1h-1zM8 0h1v1h-1zM9 0h1v1h-1zM11 0h1v1h-1zM14 0h1v1h-1zM15 0h1v1h-1zM16 0h1v1h-1zM17 0h1v1h-1zM18 0h1v1h-1zM19 0h1v1h-1zM20 0h1v1h-1zM0 1h1v1h-1zM6 1h1v1h-1zM8 1h1v1h-1zM9 1h1v1h-1zM11 1h1v1h-1zM12 1h1v1h-1zM14 1h1v1h-1zM20 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM3 2h1v1h-1zM4 2h1v1h-1zM6 2h1v1h-1zM8 2h1v1h-1zM9 2h1v1h-1zM10 2h1v1h-1zM12 2h1v1h-1zM14 2h1v1h-1zM16 2h1v1h-1zM17 2h1v1h-1zM18 2h1v1h-1zM20 2h1v1h-1zM0 3h1v1h-1zM2 3h1v1h-1zM3 3h1v1h-1zM4 3h1v1h-1zM6 3h1v1h-1zM8 3h1v1h-1zM12 3h1v1h-1zM14 3h1v1h-1zM16 3h1v1h-1zM17 3h1v1h-1zM18 3h1v1h-1zM20 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM3 4h1v1h-1zM4 4h1v1h-1zM6 4h1v1h-1zM9 4h1v1h-1zM11 4h1v1h-1zM12 4h1v1h-1zM14 4h1v1h-1zM16 4h1v1h-1zM17 4h1v1h-1zM18 4h1v1h-1zM20 4h1v1h-1zM0 5h1v1h-1zM6 5h1v1h-1zM8 5h1v1h-1zM9 5h1v1h-1zM11 5h1v1h-1zM14 5h1v1h-1zM20 5h1v1h-1zM0 6h1v1h-1zM1 6h1v1h-1zM2 6h1v1h-1zM3 6h1v1h-1zM4 6h1v1h-1zM5 6h1v1h-1zM6 6h1v1h-1zM8 6h1v1h-1zM10 6h1v1h-1zM12 6h1v1h-1zM14 6h1v1h-1zM15 6h1v1h-1zM16 6h1v1h-1zM17 6h1v1h-1zM18 6h1v1h-1zM19 6h1v1h-1zM20 6h1v1h-1zM8 7h1v1h-1zM10 7h1v1h-1zM11 7h1v1h-1zM1 8h1v1h-1zM4 8h1v1h-1zM6 8h1v1h-1zM9 8h1v1h-1zM11 8h1v1h-1zM12 8h1v1h-1zM14 8h1v1h-1zM16 8h1v1h-1zM0 9h1v1h-1zM9 9h1v1h-1zM14 9h1v1h-1zM15 9h1v1h-1zM17 9h1v1h-1zM19 9h1v1h-1zM20 9h1v1h-1zM0 10h1v1h-1zM2 10h1v1h-1zM3 10h1v1h-1zM4 10h1v1h-1zM6 10h1v1h-1zM7 10h1v1h-1zM12 10h1v1h-1zM13 10h1v1h-1zM14 10h1v1h-1zM17 10h1v1h-1zM18 10h1v1h-1zM19 10h1v1h-1zM20 10h1v1h-1zM2 11h1v1h-1zM3 11h1v1h-1zM4 11h1v1h-1zM5 11h1v1h-1zM12 11h1v1h-1zM17 11h1v1h-1zM18 11h1v1h-1zM19 11h1v1h-1zM0 12h1v1h-1zM1 12h1v1h-1zM2 12h1v1h-1zM3 12h1v1h-1zM4 12h1v1h-1zM5 12h1v1h-1zM6 12h1v1h-1zM7 12h1v1h-1zM8 12h1v1h-1zM9 12h1v1h-1zM10 12h1v1h-1zM13 12h1v1h-1zM14 12h1v1h-1zM15 12h1v1h-1zM16 12h1v1h-1zM17 12h1v1h-1zM9 13h1v1h-1zM10 13h1v1h-1zM11 13h1v1h-1zM12 13h1v1h-1zM14 13h1v1h-1zM15 13h1v1h-1zM18 13h1v1h-1zM20 13h1v1h-1zM0 14h1v1h-1zM1 14h1v1h-1zM2 14h1v1h-1zM3 14h1v1h-1zM4 14h1v1h-1zM5 14h1v1h-1zM6 14h1v1h-1zM12 14h1v1h-1zM13 14h1v1h-1zM14 14h1v1h-1zM18 14h1v1h-1zM19 14h1v1h-1zM0 15h1v1h-1zM6 15h1v1h-1zM13 15h1v1h-1zM15 15h1v1h-1zM16 15h1v1h-1zM17 15h1v1h-1zM18 15h1v1h-1zM19 15h1v1h-1zM0 16h1v1h-1zM2 16h1v1h-1zM3 16h1v1h-1zM4 16h1v1h-1zM6 16h1v1h-1zM9 16h1v1h-1zM13 16h1v1h-1zM14 16h1v1h-1zM15 16h1v1h-1zM16 16h1v1h-1zM17 16h1v1h-1zM0 17h1v1h-1zM2 17h1v1h-1zM3 17h1v1h-1zM4 17h1v1h-1zM6 17h1v1h-1zM11 17h1v1h-1zM17 17h1v1h-1zM19 17h1v1h-1zM0 18h1v1h-1zM2 18h1v1h-1zM3 18h1v1h-1zM4 18h1v1h-1zM6 18h1v1h-1zM9 18h1v1h-1zM10 18h1v1h-1zM13 18h1v1h-1zM14 18h1v1h-1zM15 18h1v1h-1zM18 18h1v1h-1zM0 19h1v1h-1zM6 19h1v1h-1zM9 19h1v1h-1zM11 19h1v1h-1zM12 19h1v1h-1zM17 19h1v1h-1zM20 19h1v1h-1zM0 20h1v1h-1zM1 20h1v1h-1zM2 20h1v1h-1zM3 20h1v1h-1zM4 20h1v1h-1zM5 20h1v1h-1zM6 20h1v1h-1zM8 20h1v1h-1zM9 20h1v1h-1zM10 20h1v1h-1zM12 20h1v1h-1zM13 20h1v1h-1zM14 20h1v1h-1zM16 20h1v1h-1zM20 20h1v1h-1z"></path></svg></span>
+</a>
+</div>
+</div>
+
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 144px; padding: 8px 16px 24px; box-sizing: border-box; flex-shrink: 0; border-top: 2px solid #2A3F33">
+<button type="button" role="switch" aria-checked="false" aria-label="Live mode, off" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 64px; padding: 0 6px; border-radius: 999px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; box-sizing: border-box; min-width: 0">Live</button>
+<button type="button" aria-label="Ask TrailSense" style="width: 112px; height: 112px; flex-shrink: 0; border-radius: 50%; background: #1B2C23; border: 3px solid #5FC98A; color: #F2F5F0; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0; box-sizing: border-box"><svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
+<button type="button" role="switch" aria-checked="false" aria-label="Low vision display, off" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 64px; padding: 0 6px; border-radius: 999px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; box-sizing: border-box; min-width: 0">Low vision</button>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

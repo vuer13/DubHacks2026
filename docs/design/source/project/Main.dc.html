@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TrailSense design system</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0B1410}
+a{color:#5FC98A}a:hover{color:#9ED8AE}
+:focus-visible{outline:3px solid #F2F5F0;outline-offset:3px;border-radius:inherit}
+@keyframes ts-pulse{0%{transform:scale(1);opacity:.7}100%{transform:scale(1.28);opacity:0}}
+.ts-pulse{animation:ts-pulse 1.4s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.ts-pulse{animation:none;opacity:.5}}
+</style>
+</helmet>
+<div style="width: 100%; box-sizing: border-box; background: #0B1410; color: #F2F5F0; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif; padding: 72px 16px 96px; display: flex; flex-direction: column; align-items: center">
+<div style="width: 100%; max-width: 1200px; display: flex; flex-direction: column; gap: 80px">
+
+<header style="display: flex; flex-direction: column; gap: 20px; max-width: 880px">
+<p style="margin: 0; font-size: 20px; line-height: 26px; letter-spacing: 0.04em; text-transform: uppercase; color: #5FC98A; font-weight: 600">TrailSense design system</p>
+<h1 style="margin: 0; font-size: 56px; line-height: 60px; font-weight: 700; letter-spacing: -0.01em">Listen first. Read at arm's length.</h1>
+<p style="margin: 0; font-size: 22px; line-height: 32px; color: #AEBBB2">TrailSense is a mobile web app for blind and low-vision hikers. The phone hangs on the chest or sits in one hand while a vision model speaks short hazard warnings and a voice agent answers questions. The hiker mostly listens, so every screen is built for VoiceOver first, then for a sighted teammate glancing at it in direct sunlight. Dark theme only. Two accents, forest green and fork blue, plus a three-step severity scale and one SOS pair. Nothing else.</p>
+</header>
+
+<section aria-labelledby="h-colour" style="display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<h2 id="h-colour" style="margin: 0; font-size: 36px; line-height: 42px; font-weight: 700">1. Colour tokens</h2>
+<p style="margin: 0; font-size: 20px; line-height: 28px; color: #AEBBB2; max-width: 880px">Every text and background pair below clears WCAG AAA at 7:1 or better. Ratios are measured against the fill the text sits on.</p>
+</div>
+
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; color: #AEBBB2">Ground and text</h3>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #0B1410; border: 2px solid #2A3F33; border-radius: 16px; color: #F2F5F0"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-bg</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#0B1410</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Page background, near-black green</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #13201A; border: 2px solid #2A3F33; border-radius: 16px; color: #F2F5F0"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-surface</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#13201A</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Rows and cards. Text 15.3:1</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #1B2C23; border-radius: 16px; color: #F2F5F0"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-surface-2</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#1B2C23</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Raised controls, ring track. Text 13.3:1, muted 7.4:1</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #F2F5F0; border-radius: 16px; color: #0B1410"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-text</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#F2F5F0</span><span style="font-size: 18px; line-height: 24px; color: #2A3F33; margin-top: auto">Primary text and focus ring. 17.0:1 on --ts-bg</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #AEBBB2; border-radius: 16px; color: #0B1410"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-text-muted</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#AEBBB2</span><span style="font-size: 18px; line-height: 24px; color: #2A3F33; margin-top: auto">Timestamps, scene sentences. 9.4:1 on --ts-bg</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #2A3F33; border-radius: 16px; color: #F2F5F0"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-divider</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#2A3F33</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Hairlines and card edges. Never carries text</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #1B5A38; border-radius: 16px; color: #F2F5F0"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-accent</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#1B5A38</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Forest green. Primary action fill, trail clear. Text 7.4:1</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 20px; box-sizing: border-box; min-height: 180px; background: #0B1410; border: 2px solid #5FC98A; border-radius: 16px; color: #5FC98A"><span style="font-size: 20px; line-height: 26px; font-weight: 600">--ts-accent-bright</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">#5FC98A</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Same green as text, icon or outline on dark. 9.1:1 on --ts-bg</span></div>
+</div>
+
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; color: #AEBBB2">Severity scale, distinguishable by luminance alone</h3>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #9ED8AE; border-radius: 16px; color: #0B1410"><span style="font-size: 28px; line-height: 34px; font-weight: 700">1 Note</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-sev-1-bg #9ED8AE<br>--ts-sev-1-fg #0B1410</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Calm green. Text 11.5:1. Luminance 59%</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #E0A526; border-radius: 16px; color: #0B1410"><span style="font-size: 28px; line-height: 34px; font-weight: 700">2 Caution</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-sev-2-bg #E0A526<br>--ts-sev-2-fg #0B1410</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Amber. Text 8.5:1. Luminance 43%</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #8F0F19; border-radius: 16px; color: #FFFFFF"><span style="font-size: 28px; line-height: 34px; font-weight: 700">3 Stop</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-sev-3-bg #8F0F19<br>--ts-sev-3-fg #FFFFFF</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Red with pure white. Text 9.3:1. Luminance 6%</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 16px">
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2; min-width: 200px">Greyscale check</span>
+<div style="display: flex; gap: 16px; filter: grayscale(1)">
+<div style="width: 160px; height: 64px; border-radius: 12px; background: #9ED8AE; color: #0B1410; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700">Note</div>
+<div style="width: 160px; height: 64px; border-radius: 12px; background: #E0A526; color: #0B1410; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700">Caution</div>
+<div style="width: 160px; height: 64px; border-radius: 12px; background: #8F0F19; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700">Stop</div>
+</div>
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2">Light, mid, dark. Severity rises as the swatch darkens, and the stop step flips to white text.</span>
+</div>
+
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600; color: #AEBBB2">Event and emergency colours</h3>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #8DC4F5; border-radius: 16px; color: #0B1410"><span style="font-size: 28px; line-height: 34px; font-weight: 700">Fork</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-fork-bg #8DC4F5<br>--ts-fork-fg #0B1410</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Junction events and sign readouts. Text 10.1:1. Always paired with the fork glyph and the word Fork</span></div>
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #FFD60A; border-radius: 16px; color: #000000"><span style="font-size: 28px; line-height: 34px; font-weight: 700">SOS</span><span style="font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-sos-bg #FFD60A<br>--ts-sos-fg #000000</span><span style="font-size: 18px; line-height: 24px; margin-top: auto">Yellow and black, 14.9:1. Red on yellow was measured at 4.4:1 and rejected. The inverse, yellow text on black, is used for the SOS banner</span></div>
+<div style="display: flex; flex-direction: column; gap: 16px; padding: 24px; box-sizing: border-box; min-height: 200px; background: #13201A; border-radius: 16px; color: #F2F5F0">
+<span style="font-size: 28px; line-height: 34px; font-weight: 700">Health</span>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 18px; line-height: 24px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">
+<div style="display: flex; align-items: center; gap: 12px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #4CC37A; flex-shrink: 0"></span><span>--ts-health-ok #4CC37A</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #FF5C5C; flex-shrink: 0"></span><span>--ts-health-fail #FF5C5C</span></div>
+<div style="display: flex; align-items: center; gap: 12px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #8A958D; flex-shrink: 0"></span><span>--ts-health-off #8A958D</span></div>
+</div>
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2; margin-top: auto">Indicators only, never text. Each is over 6:1 on --ts-bg and always sits beside a word</span>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="h-type" style="display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<h2 id="h-type" style="margin: 0; font-size: 36px; line-height: 42px; font-weight: 700">2. Type scale</h2>
+<p style="margin: 0; font-size: 20px; line-height: 28px; color: #AEBBB2; max-width: 880px">System font stack: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif. No web font loads, so the first spoken line paints with the page. Nothing on the hiker screen is set below 18px.</p>
+</div>
+<div style="display: flex; flex-direction: column; background: #13201A; border-radius: 20px; overflow: hidden">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; padding: 32px; border-bottom: 2px solid #2A3F33">
+<div style="flex: 999 1 560px; min-width: 0">
+<p aria-live="assertive" aria-atomic="true" style="margin: 0; font-size: {{heroSize}}px; line-height: 1.05; font-weight: 700; letter-spacing: -0.015em; max-width: 12ch; text-wrap: balance">Drop-off, left, stop</p>
+</div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2">
+<span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-hero</span>
+<span>56px preferred, 40px minimum</span>
+<span>Line height 1.05, weight 700</span>
+<span>Max 6 words per line, max-width 12ch</span>
+<span>The last spoken line. aria-live assertive</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px 32px; border-bottom: 2px solid #2A3F33">
+<div style="flex: 999 1 560px; min-width: 0"><p style="margin: 0; font-size: 40px; line-height: 42px; font-weight: 700; letter-spacing: -0.01em">Loose rocks ahead, slow</p></div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2"><span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-hero-min</span><span>40px / 42px, weight 700. Used when the line reaches 6 words</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px 32px; border-bottom: 2px solid #2A3F33">
+<div style="flex: 999 1 560px; min-width: 0"><p style="margin: 0; font-size: 32px; line-height: 38px; font-weight: 700">Fork in 20 metres</p></div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2"><span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-heading</span><span>32px / 38px, weight 700. Screen titles, sign labels, countdown prompt</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px 32px; border-bottom: 2px solid #2A3F33">
+<div style="flex: 999 1 560px; min-width: 0"><p style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Ridge Trail, left</p></div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2"><span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-label</span><span>24px / 30px, weight 600. Event say text, button labels, distances</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px 32px; border-bottom: 2px solid #2A3F33">
+<div style="flex: 999 1 560px; min-width: 0"><p style="margin: 0; font-size: 20px; line-height: 28px; font-weight: 400; color: #AEBBB2">Steep edge about two metres to your left.</p></div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2"><span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-secondary</span><span>20px / 28px, weight 400. Scene sentences, sign lines, toggle captions. 20px is the floor for labels</span></div>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 24px; padding: 28px 32px">
+<div style="flex: 999 1 560px; min-width: 0"><p style="margin: 0; font-size: 18px; line-height: 24px; font-weight: 500; color: #AEBBB2; font-variant-numeric: tabular-nums">14:02</p></div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 6px; font-size: 18px; line-height: 24px; color: #AEBBB2"><span style="color: #F2F5F0; font-size: 20px; font-weight: 600">--ts-type-meta</span><span>18px / 24px, weight 500, tabular numerals. Timestamps only. The absolute minimum on the hiker screen</span></div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="h-comp" style="display: flex; flex-direction: column; gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<h2 id="h-comp" style="margin: 0; font-size: 36px; line-height: 42px; font-weight: 700">3. Components</h2>
+<p style="margin: 0; font-size: 20px; line-height: 28px; color: #AEBBB2; max-width: 880px">Every control is a real button or switch with an aria-label, at least 64px on its shortest side, and carries an icon or word alongside any colour it uses.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Mic button</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 32px; justify-content: space-around; align-items: flex-start">
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 150px">
+<button type="button" aria-label="Ask TrailSense" style="width: 112px; height: 112px; border-radius: 50%; background: #1B2C23; border: 3px solid #5FC98A; color: #F2F5F0; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0"><svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
+<span style="font-size: 20px; line-height: 26px; font-weight: 600">Idle</span>
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2; text-align: center">surface-2 fill, accent-bright ring</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 150px">
+<div style="position: relative; width: 112px; height: 112px">
+<span aria-hidden="true" class="ts-pulse" style="position: absolute; inset: 0; border-radius: 50%; border: 3px solid #5FC98A"></span>
+<button type="button" aria-label="Listening, tap to stop" aria-pressed="true" style="position: relative; width: 112px; height: 112px; border-radius: 50%; background: #1B5A38; border: 3px solid #5FC98A; color: #F2F5F0; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0"><svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0"></path><path d="M12 18v3"></path></svg></button>
+</div>
+<span style="font-size: 20px; line-height: 26px; font-weight: 600">Listening</span>
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2; text-align: center">accent fill, one slow outer pulse</span>
+</div>
+<div style="display: flex; flex-direction: column; align-items: center; gap: 16px; width: 150px">
+<button type="button" aria-label="TrailSense is speaking, tap to interrupt" style="width: 112px; height: 112px; border-radius: 50%; background: #F2F5F0; border: 3px solid #F2F5F0; color: #0B1410; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0"><svg aria-hidden="true" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 10v4"></path><path d="M8 7v10"></path><path d="M12 4v16"></path><path d="M16 8v8"></path><path d="M20 10v4"></path></svg></button>
+<span style="font-size: 20px; line-height: 26px; font-weight: 600">Agent speaking</span>
+<span style="font-size: 18px; line-height: 24px; color: #AEBBB2; text-align: center">inverted, waveform glyph, no motion</span>
+</div>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">112px on the hiker screen, 96px minimum. Centred at the bottom of the screen where a thumb lands without looking.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Pill toggle and secondary button</h3>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<button type="button" role="switch" aria-checked="true" aria-label="Live hazard detection, on" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 64px; padding: 0 12px 0 24px; box-sizing: border-box; border-radius: 999px; background: #1B5A38; border: 3px solid #1B5A38; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer; text-align: left"><span>Live</span><span style="display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 500"><span>On</span><span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; background: #F2F5F0; display: flex; align-items: center; justify-content: center; color: #1B5A38"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></span></span></button>
+<button type="button" role="switch" aria-checked="false" aria-label="Low vision display, off" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 64px; padding: 0 12px 0 24px; box-sizing: border-box; border-radius: 999px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer; text-align: left"><span>Low vision</span><span style="display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 500; color: #AEBBB2"><span>Off</span><span aria-hidden="true" style="width: 44px; height: 44px; border-radius: 50%; border: 3px solid #AEBBB2; box-sizing: border-box"></span></span></button>
+<button type="button" aria-label="Repeat last warning" style="display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 64px; padding: 0 24px; box-sizing: border-box; border-radius: 16px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v5h5"></path></svg><span>Repeat last</span></button>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">Toggles say their state in words, On or Off, next to the knob. The secondary button uses surface-2 with a 3px muted border; only one accent-filled primary action appears per screen.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Health dot</h3>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 0 20px; background: #1B2C23; border-radius: 16px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #4CC37A; flex-shrink: 0"></span><span style="font-size: 20px; line-height: 26px; font-weight: 600">Camera on</span><span style="margin-left: auto; font-size: 18px; color: #AEBBB2">--ts-health-ok</span></div>
+<div style="display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 0 20px; background: #1B2C23; border-radius: 16px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #FF5C5C; flex-shrink: 0"></span><span style="font-size: 20px; line-height: 26px; font-weight: 600">Model not responding</span><span style="margin-left: auto; font-size: 18px; color: #AEBBB2">--ts-health-fail</span></div>
+<div style="display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 0 20px; background: #1B2C23; border-radius: 16px"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #8A958D; flex-shrink: 0"></span><span style="font-size: 20px; line-height: 26px; font-weight: 600">GPS off</span><span style="margin-left: auto; font-size: 18px; color: #AEBBB2">--ts-health-off</span></div>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">20px dot, 16px gap, then the status in words. The dot is aria-hidden; the words are what VoiceOver reads.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Countdown ring, fall check-in</h3>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 32px">
+<div role="timer" aria-label="Fall detected. Responding in 24 seconds" style="position: relative; width: 176px; height: 176px; flex-shrink: 0">
+<svg aria-hidden="true" width="176" height="176" viewBox="0 0 176 176" style="transform: rotate(-90deg)"><circle cx="88" cy="88" r="78" fill="none" stroke="#1B2C23" stroke-width="14"></circle><circle cx="88" cy="88" r="78" fill="none" stroke="#E0A526" stroke-width="14" stroke-linecap="round" stroke-dasharray="490" stroke-dashoffset="98"></circle></svg>
+<div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px"><span style="font-size: 56px; line-height: 56px; font-weight: 700; font-variant-numeric: tabular-nums">24</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2">seconds</span></div>
+</div>
+<div style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 16px">
+<p style="margin: 0; font-size: 32px; line-height: 38px; font-weight: 700">Are you okay?</p>
+<button type="button" aria-label="I am okay, cancel the alert" style="display: flex; align-items: center; justify-content: center; min-height: 64px; padding: 0 24px; border-radius: 16px; background: #1B5A38; border: 3px solid #1B5A38; color: #F2F5F0; font: inherit; font-size: 24px; font-weight: 600; cursor: pointer">I'm okay</button>
+</div>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">14px stroke in --ts-sev-2-bg on a surface-2 track. The number is spoken every 5 seconds; the ring only mirrors it. At zero the screen becomes the SOS banner.</p>
+</div>
+
+<div style="grid-column: 1 / -1; display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Event row</h3>
+<ul aria-label="Recent events" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px">
+<li style="display: flex; align-items: stretch; gap: 0; min-height: 88px; background: #1B2C23; border-radius: 16px; overflow: hidden">
+<div aria-hidden="true" style="width: 72px; flex-shrink: 0; background: #8F0F19; color: #FFFFFF; display: flex; align-items: center; justify-content: center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 3h9L21 7.5v9L16.5 21h-9L3 16.5v-9z"></path><path d="M12 8v5"></path><path d="M12 16.5h.01"></path></svg></div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 20px; min-width: 0; flex: 1">
+<div style="display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap"><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-variant-numeric: tabular-nums">14:02</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-weight: 600">Stop</span></div>
+<span style="font-size: 24px; line-height: 30px; font-weight: 600">Drop-off, left, stop</span>
+<span style="font-size: 20px; line-height: 28px; color: #AEBBB2">Steep edge about two metres to your left.</span>
+</div>
+</li>
+<li style="display: flex; align-items: stretch; gap: 0; min-height: 88px; background: #1B2C23; border-radius: 16px; overflow: hidden">
+<div aria-hidden="true" style="width: 72px; flex-shrink: 0; background: #E0A526; color: #0B1410; display: flex; align-items: center; justify-content: center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3L22 20H2z"></path><path d="M12 10v4"></path><path d="M12 17.5h.01"></path></svg></div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 20px; min-width: 0; flex: 1">
+<div style="display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap"><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-variant-numeric: tabular-nums">14:01</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-weight: 600">Caution</span></div>
+<span style="font-size: 24px; line-height: 30px; font-weight: 600">Loose rocks ahead, slow</span>
+</div>
+</li>
+<li style="display: flex; align-items: stretch; gap: 0; min-height: 88px; background: #1B2C23; border-radius: 16px; overflow: hidden">
+<div aria-hidden="true" style="width: 72px; flex-shrink: 0; background: #8DC4F5; color: #0B1410; display: flex; align-items: center; justify-content: center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-8"></path><path d="M12 13L6 6"></path><path d="M12 13l6-7"></path><path d="M6 6H4v3"></path><path d="M18 6h2v3"></path></svg></div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 20px; min-width: 0; flex: 1">
+<div style="display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap"><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-variant-numeric: tabular-nums">13:58</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-weight: 600">Fork</span></div>
+<span style="font-size: 24px; line-height: 30px; font-weight: 600">Fork in 20 metres</span>
+<span style="font-size: 20px; line-height: 28px; color: #AEBBB2">Sign reads: Ridge Trail, left. Lake Loop, right.</span>
+</div>
+</li>
+<li style="display: flex; align-items: stretch; gap: 0; min-height: 88px; background: #1B2C23; border-radius: 16px; overflow: hidden">
+<div aria-hidden="true" style="width: 72px; flex-shrink: 0; background: #9ED8AE; color: #0B1410; display: flex; align-items: center; justify-content: center"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg></div>
+<div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 16px 20px; min-width: 0; flex: 1">
+<div style="display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap"><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-variant-numeric: tabular-nums">13:55</span><span style="font-size: 18px; line-height: 24px; color: #AEBBB2; font-weight: 600">Note</span></div>
+<span style="font-size: 24px; line-height: 30px; font-weight: 600">Trail clear</span>
+<span style="font-size: 20px; line-height: 28px; color: #AEBBB2">Wide packed dirt, gentle climb.</span>
+</div>
+</li>
+</ul>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">Timestamp and severity word, then the say text at 24px, then the optional scene sentence and sign lines at 20px. The 72px swatch carries an icon as well as a colour, and the severity is also written out, so greyscale and VoiceOver both get it.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Sign readout card</h3>
+<div role="group" aria-label="Sign: Ridge Trail, left, 1.2 kilometres" style="display: flex; align-items: center; gap: 24px; padding: 24px; min-height: 120px; background: #1B2C23; border-radius: 16px; border-left: 12px solid #8DC4F5">
+<div aria-hidden="true" style="width: 72px; height: 72px; border-radius: 16px; background: #8DC4F5; color: #0B1410; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12H4"></path><path d="M10 6l-6 6 6 6"></path></svg></div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 32px; line-height: 38px; font-weight: 700">Ridge Trail</span>
+<span style="font-size: 24px; line-height: 30px; color: #AEBBB2">Left, 1.2 km</span>
+</div>
+</div>
+<div role="group" aria-label="Sign: Lake Loop, right, 3.4 kilometres" style="display: flex; align-items: center; gap: 24px; padding: 24px; min-height: 120px; background: #1B2C23; border-radius: 16px; border-left: 12px solid #8DC4F5">
+<div aria-hidden="true" style="width: 72px; height: 72px; border-radius: 16px; background: #8DC4F5; color: #0B1410; display: flex; align-items: center; justify-content: center; flex-shrink: 0"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h16"></path><path d="M14 6l6 6-6 6"></path></svg></div>
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<span style="font-size: 32px; line-height: 38px; font-weight: 700">Lake Loop</span>
+<span style="font-size: 24px; line-height: 30px; color: #AEBBB2">Right, 3.4 km</span>
+</div>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">Arrow glyph in fork blue, label at 32px, direction and distance at 24px. The group label reads the whole sign in one breath.</p>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<h3 style="margin: 0; font-size: 24px; line-height: 30px; font-weight: 600">Status banner</h3>
+<div style="display: flex; flex-direction: column; gap: 12px">
+<div role="status" style="display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 0 24px; border-radius: 16px; background: #1B5A38; color: #F2F5F0"><svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"></path></svg><span style="font-size: 24px; line-height: 30px; font-weight: 600">Live. Trail clear.</span></div>
+<div role="status" style="display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 0 24px; border-radius: 16px; background: #1B2C23; border: 3px solid #AEBBB2; color: #F2F5F0; box-sizing: border-box"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 50%; background: #FF5C5C; flex-shrink: 0"></span><span style="font-size: 24px; line-height: 30px; font-weight: 600">Camera paused. Tap to resume.</span></div>
+<div role="alert" style="display: flex; align-items: center; gap: 16px; min-height: 72px; padding: 0 24px; border-radius: 16px; background: #000000; border: 3px solid #FFD60A; color: #FFD60A; box-sizing: border-box"><svg aria-hidden="true" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5h.01"></path></svg><span style="font-size: 24px; line-height: 30px; font-weight: 700">SOS sent. Help is coming.</span></div>
+</div>
+<p style="margin: 0; font-size: 18px; line-height: 24px; color: #AEBBB2">Pinned under the hero line. Trail clear uses the accent, interruptions use surface-2 with a health dot and words, SOS uses yellow on black and role alert.</p>
+</div>
+
+</div>
+</section>
+
+<section aria-labelledby="h-space" style="display: flex; flex-direction: column; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 12px">
+<h2 id="h-space" style="margin: 0; font-size: 36px; line-height: 42px; font-weight: 700">4. Spacing and touch targets</h2>
+<p style="margin: 0; font-size: 20px; line-height: 28px; color: #AEBBB2; max-width: 880px">A 4px base. Gutters are 16px at every screen edge. No tappable control is smaller than 64px on its shortest side, with at least 12px between neighbours so a gloved thumb cannot hit two.</p>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 24px">
+<div style="flex: 1 1 520px; display: flex; flex-direction: column; gap: 12px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-1</span><span aria-hidden="true" style="width: 4px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">4px, dot to label hairline</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-2</span><span aria-hidden="true" style="width: 8px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">8px, icon to text</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-3</span><span aria-hidden="true" style="width: 12px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">12px, between stacked controls</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-4</span><span aria-hidden="true" style="width: 16px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">16px, screen gutter, row padding</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-6</span><span aria-hidden="true" style="width: 24px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">24px, card padding</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-8</span><span aria-hidden="true" style="width: 32px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">32px, between groups</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-12</span><span aria-hidden="true" style="width: 48px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">48px, hero line to banner</span></div>
+<div style="display: flex; align-items: center; gap: 24px"><span style="width: 180px; font-size: 20px; line-height: 26px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">--ts-space-16</span><span aria-hidden="true" style="width: 64px; height: 24px; background: #5FC98A; border-radius: 2px"></span><span style="font-size: 18px; color: #AEBBB2">64px, section gap, mic button clearance</span></div>
+</div>
+<div style="flex: 1 1 400px; display: flex; flex-direction: column; gap: 24px; padding: 32px; box-sizing: border-box; background: #13201A; border-radius: 20px">
+<div style="display: flex; gap: 12px; padding: 0 16px; border-left: 2px dashed #AEBBB2; border-right: 2px dashed #AEBBB2; align-items: center; justify-content: center">
+<div style="width: 64px; height: 64px; border-radius: 16px; border: 3px solid #5FC98A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600">64</div>
+<div style="width: 64px; height: 64px; border-radius: 16px; border: 3px solid #5FC98A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600">64</div>
+<div style="flex: 1; height: 64px; border-radius: 16px; border: 3px solid #5FC98A; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 600">full width</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; font-size: 18px; line-height: 24px; color: #AEBBB2">
+<span>--ts-touch-min 64px square</span>
+<span>--ts-touch-mic 112px, never under 96px</span>
+<span>--ts-gutter 16px, dashed lines above</span>
+<span>--ts-radius-control 16px, --ts-radius-pill 999px</span>
+</div>
+</div>
+</div>
+</section>
+
+<section aria-labelledby="h-a11y" style="display: flex; flex-direction: column; gap: 20px; padding: 40px; box-sizing: border-box; background: #13201A; border-radius: 20px; border: 2px solid #2A3F33">
+<h2 id="h-a11y" style="margin: 0; font-size: 36px; line-height: 42px; font-weight: 700">5. Accessibility rules</h2>
+<p style="margin: 0; font-size: 22px; line-height: 34px; max-width: 1000px">Every control is a native button, switch or link with an aria-label that says what it does and, for toggles, its current state. The last spoken line lives in a single region marked aria-live assertive and aria-atomic, so a new warning interrupts whatever VoiceOver was reading; everything else on the screen is polite or silent. Colour is never the only signal: each severity carries an icon and its name in words, each health dot sits beside a status sentence, and the fork blue always travels with the fork glyph. Focus rings are a 3px off-white outline with 3px offset, visible on every fill in this theme including the SOS yellow. Motion is limited to one slow pulse on the listening mic and the easing of the countdown ring, and both stop under prefers-reduced-motion. Nothing on the hiker screen is set below 18px, nothing tappable is under 64px, and all type scales with the user's system text size.</p>
+</section>
+
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"heroSize":{"editor":"range","default":56,"min":40,"max":64,"step":2,"unit":"px","section":"Type"},"$preview":{"width":1440,"height":4300}}'>
+class Component extends DCLogic {
+renderVals() {
+return { heroSize: this.props.heroSize ?? 56 };
+}
+}
+</script>
+</body>
+</html>

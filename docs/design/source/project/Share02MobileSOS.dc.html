@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TrailSense live share, phone, SOS sent</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#F4F6F2}
+a{color:#1B5A38}a:hover{color:#0F3D25}
+:focus-visible{outline:3px solid #0B1410;outline-offset:3px;border-radius:inherit}
+@keyframes ts-ping{0%{transform:scale(1);opacity:.6}100%{transform:scale(2.4);opacity:0}}
+.ts-ping{transform-origin:center;animation:ts-ping 1.6s ease-out infinite}
+@media (prefers-reduced-motion: reduce){.ts-ping{animation:none;opacity:.35;transform:scale(1.6)}}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #F4F6F2; color: #0B1410; font-family: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+<div role="alert" style="display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 16px; box-sizing: border-box; background: #8F0F19; color: #FFFFFF; flex-shrink: 0"><svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink: 0"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6"></path><path d="M12 16.5h.01"></path></svg><span style="font-size: 18px; line-height: 24px; font-weight: 700">SOS sent at 2:14 pm. Emergency contact notified.</span></div>
+
+<header style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; box-sizing: border-box; flex-shrink: 0">
+<div style="display: flex; flex-direction: column; gap: 2px; min-width: 0">
+<span style="font-size: 20px; line-height: 26px; font-weight: 700">TrailSense live share</span>
+<span style="font-size: 16px; line-height: 22px; color: #44534A; font-family: ui-monospace, SFMono-Regular, Menlo, monospace">Session 7K2M-QX</span>
+</div>
+<div role="status" style="display: flex; align-items: center; gap: 8px; font-size: 16px; line-height: 22px; color: #44534A; white-space: nowrap"><span aria-hidden="true" style="width: 10px; height: 10px; border-radius: 50%; background: #8F0F19"></span><span>Last update 12 s ago</span></div>
+</header>
+
+<div role="img" aria-label="Map of the hike. Track in green, latest position near Lynn Loop junction" style="position: relative; flex: 1; min-height: 0; margin: 0 16px; border-radius: 16px; background: #E6EAE4; overflow: hidden; border: 1px solid #D5DDD6">
+<svg aria-hidden="true" width="100%" height="100%" viewBox="0 0 358 440" preserveAspectRatio="xMidYMid slice" style="position: absolute; left: 0; top: 0">
+<path d="M-20 90 C60 60 120 120 200 80 S320 40 380 70" fill="none" stroke="#D5DDD6" stroke-width="2"></path>
+<path d="M-20 150 C60 120 130 190 210 150 S330 110 380 140" fill="none" stroke="#D5DDD6" stroke-width="2"></path>
+<path d="M-20 220 C70 190 130 260 220 220 S330 190 380 210" fill="none" stroke="#D5DDD6" stroke-width="2"></path>
+<path d="M-20 300 C70 270 140 340 230 300 S330 270 380 290" fill="none" stroke="#D5DDD6" stroke-width="2"></path>
+<path d="M-20 380 C70 350 140 420 230 380 S330 350 380 370" fill="none" stroke="#D5DDD6" stroke-width="2"></path>
+<path d="M40 460 C60 400 90 380 110 330 S150 260 170 230 S230 170 250 150" fill="none" stroke="#1B5A38" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"></path>
+<path d="M250 150 C270 130 290 110 330 100" fill="none" stroke="#1B5A38" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 10"></path>
+<circle class="ts-ping" cx="250" cy="150" r="14" fill="#1B5A38" opacity="0.5" style="transform-box: fill-box"></circle>
+<circle cx="250" cy="150" r="11" fill="#1B5A38" stroke="#FFFFFF" stroke-width="4"></circle>
+</svg>
+<span style="position: absolute; right: 10px; bottom: 8px; font-size: 14px; line-height: 18px; color: #44534A; background: #F4F6F2; padding: 2px 8px; border-radius: 6px">Map data: OpenStreetMap</span>
+</div>
+
+<section aria-labelledby="ev-h" style="margin: 16px 16px 0; padding: 16px; box-sizing: border-box; background: #FFFFFF; border-radius: 16px; border: 1px solid #D5DDD6; flex-shrink: 0">
+<h2 id="ev-h" style="margin: 0 0 8px; font-size: 18px; line-height: 24px; font-weight: 700">Last five events</h2>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 1px solid #D5DDD6"><span style="width: 68px; flex-shrink: 0; font-size: 16px; color: #44534A; font-variant-numeric: tabular-nums">2:14 pm</span><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #8F0F19; flex-shrink: 0"></span><span style="font-size: 18px; line-height: 24px; font-weight: 700">SOS sent after a fall check-in timed out</span></li>
+<li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 1px solid #D5DDD6"><span style="width: 68px; flex-shrink: 0; font-size: 16px; color: #44534A; font-variant-numeric: tabular-nums">2:10 pm</span><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #8F0F19; flex-shrink: 0"></span><span style="font-size: 18px; line-height: 24px">Stop warning, drop-off on the left</span></li>
+<li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 1px solid #D5DDD6"><span style="width: 68px; flex-shrink: 0; font-size: 16px; color: #44534A; font-variant-numeric: tabular-nums">1:48 pm</span><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #E0A526; flex-shrink: 0"></span><span style="font-size: 18px; line-height: 24px">Caution, loose rock on the right</span></li>
+<li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 1px solid #D5DDD6"><span style="width: 68px; flex-shrink: 0; font-size: 16px; color: #44534A; font-variant-numeric: tabular-nums">1:21 pm</span><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #9ED8AE; flex-shrink: 0"></span><span style="font-size: 18px; line-height: 24px">Note, roots ahead</span></li>
+<li style="display: flex; align-items: center; gap: 12px; min-height: 44px; border-top: 1px solid #D5DDD6"><span style="width: 68px; flex-shrink: 0; font-size: 16px; color: #44534A; font-variant-numeric: tabular-nums">1:05 pm</span><span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; background: #1B5A38; flex-shrink: 0"></span><span style="font-size: 18px; line-height: 24px">Trail clear</span></li>
+</ul>
+</section>
+
+<div style="padding: 16px 16px 24px; flex-shrink: 0">
+<a href="tel:+16045550142" aria-label="Call hiker" style="display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 72px; border-radius: 16px; background: #1B5A38; color: #FFFFFF; text-decoration: none; font-size: 26px; font-weight: 700; box-sizing: border-box"><svg aria-hidden="true" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"></path></svg><span>Call hiker</span></a>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
