@@ -24,6 +24,7 @@ from ..models import (
     ReadSignResponse,
 )
 from .pipeline import DATA_DIR, analyze_video
+from .describe import describe_clip
 
 router = APIRouter(prefix="/api", tags=["perception"])
 MAX_LIVE_CLIP_BYTES = 25 * 1024 * 1024
@@ -162,7 +163,7 @@ async def describe_surroundings(
         curl -F 'clip=@clip.webm' -F 'session_id=demo' \\
           http://localhost:8000/api/describe
     """
-    _todo("Scene description")
+    return await describe_clip(clip, session_id)
 
 
 @router.post("/read_sign", response_model=ReadSignResponse)
