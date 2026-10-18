@@ -35,6 +35,7 @@ from ..models import (
     TrailSenseModel,
     TrailState,
 )
+from .hazard_guidance import PATH_OBSTACLE_GUIDANCE
 from .mk1 import get_client, get_model_name
 from .signs import SIGN_PROMPT, normalize_sign
 
@@ -249,6 +250,8 @@ def _request_clip_analysis(frames: list[TimedFrame]) -> ModelClipOutput:
                     "roots_steps, low_branch, fork, mud_ice, wildlife, people. Treat exposed "
                     "roots, steps, holes, uneven ground, and other clear trip risks as roots_steps; "
                     "loose stones or debris as loose_rock; and overhead obstructions as low_branch. "
+                    + PATH_OBSTACLE_GUIDANCE
+                    + " "
                     "Report a person or animal only when they are in, entering, or immediately "
                     "beside the walking path and could cause a collision. Also report any other "
                     "clearly visible danger represented by these categories. Ignore people, animals, "

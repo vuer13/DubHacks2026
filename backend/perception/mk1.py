@@ -32,6 +32,7 @@ from time import perf_counter
 from perceptron import image, video_frames
 
 from .frames import Frame
+from .hazard_guidance import PATH_OBSTACLE_GUIDANCE
 from .model_output import ModelHazardOutput, to_clip_event
 
 HAZARD_EFFORT = os.getenv("MK1_HAZARD_EFFORT", "low")
@@ -47,7 +48,9 @@ SYSTEM_PROMPT = (
     "and clear trip risks as roots_steps; loose stones or debris as loose_rock; "
     "and overhead obstructions as low_branch. Report people or animals only when "
     "they are in, entering, or immediately beside the walking path and could cause "
-    "a collision. Include other clearly visible dangers represented by these types; "
+    "a collision. "
+    + PATH_OBSTACLE_GUIDANCE
+    + " Include other clearly visible dangers represented by these types; "
     "ignore people, animals, and objects safely away from the path. Severity 3 "
     "only for immediate danger within "
     "2 metres, 2 for caution, 1 for a note. Direction: the frame is five "

@@ -6,7 +6,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from "react-native";
@@ -21,7 +20,7 @@ import { emergencyContactPhone, openDialer } from "@/lib/native/dialer";
 import { createSessionId } from "@/lib/session";
 import { speakSign, speakWarning, stopWarningSpeech } from "@/lib/voice/warnings";
 import { buildSignReadout, SignReadoutHistory } from "@/lib/signReadout";
-import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
+import type { ClipEvent, ClipResponse } from "@/lib/schema";
 import { colors } from "@/theme/tokens";
 
 const SEGMENT_SECONDS = 1;
@@ -30,7 +29,7 @@ const FALL_CHECK_STRIDE_SEGMENTS = 3;
 const HAZARD_CHECK_STRIDE_SEGMENTS = 3;
 const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 
-type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
+type PendingClip = { uri: string; generation: number; sequence: number };
 
 export default function HikerScreen() {
   const cameraRef = useRef<CameraView>(null);
@@ -48,17 +47,8 @@ export default function HikerScreen() {
   const [sessionId] = useState(createSessionId);
   const [live, setLive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const [fallOnlyMode, setFallOnlyMode] = useState(false);
-  const [lowVision, setLowVision] = useState(false);
-  const [showLog, setShowLog] = useState(false);
   const [events, setEvents] = useState<ClipEvent[]>([]);
-  const [fallResult, setFallResult] = useState<FallCheckResponse | null>(null);
-  const [fallCheckStatus, setFallCheckStatus] = useState("Waiting for live camera segments");
   const [notice, setNotice] = useState<string | null>(null);
-  const [lastSign, setLastSign] = useState<string | null>(null);
-  const [captureStatus, setCaptureStatus] = useState("Monitoring is off");
-  // Dev only: off runs the whole SOS flow against a fake that contacts nobody.
-  const [realSos, setRealSos] = useState(false);
   const eventsRef = useRef<ClipEvent[]>([]);
   useEffect(() => {
     eventsRef.current = events;
@@ -79,7 +69,6 @@ export default function HikerScreen() {
     cameraRef.current?.stopRecording();
     setLive(false);
     setCameraReady(false);
-    setCaptureStatus("Monitoring is off");
   }, [live]);
 
   // A YES from fall detection starts the real check-in and SOS flow.
@@ -91,13 +80,6 @@ export default function HikerScreen() {
     stopWarningSpeech();
     startCheckin("fall", "real");
   }, [startCheckin, stopMonitoringForCheckin]);
-
-  const startDevCheckin = () => {
-    stopWarningSpeech();
-    stopMonitoringForCheckin();
-    setNotice(null);
-    startCheckin("dev", realSos ? "real" : "fake");
-  };
 
   useEffect(() => {
     if (!live || !cameraReady) return;
@@ -114,7 +96,6 @@ export default function HikerScreen() {
       pendingClipsRef.current.push({
         uri,
         generation,
-        fallOnly: fallOnlyMode,
         sequence: clipSequenceRef.current++,
       });
       if (pendingClipsRef.current.length > MAX_PENDING_CLIPS) {
@@ -128,12 +109,6 @@ export default function HikerScreen() {
           nextFallAssessmentSequenceRef.current =
             firstPending.sequence + FALL_WINDOW_SEGMENTS - 1;
         }
-        setFallCheckStatus("Analysis fell behind; skipped stale clips and refilling the 4-second window");
-      }
-      if (pendingClipsRef.current.length > 0) {
-        setCaptureStatus(
-          `${pendingClipsRef.current.length} one-second clip${pendingClipsRef.current.length === 1 ? "" : "s"} waiting for analysis`,
-        );
       }
       if (processingRef.current) return;
 
@@ -151,25 +126,10 @@ export default function HikerScreen() {
 
           const fallAssessmentDue =
             current.sequence >= nextFallAssessmentSequenceRef.current;
-          const windowStartSequence =
-            nextFallAssessmentSequenceRef.current - FALL_WINDOW_SEGMENTS + 1;
-          const clipsInWindow = Math.min(
-            FALL_WINDOW_SEGMENTS,
-            Math.max(0, current.sequence - windowStartSequence + 1),
-          );
-          if (!fallAssessmentDue) {
-            setFallCheckStatus(
-              clipsInWindow < FALL_WINDOW_SEGMENTS
-                ? `Filling the 4-second window (${clipsInWindow}/${FALL_WINDOW_SEGMENTS} clips)…`
-                : `Collecting the next window; checking again in ${nextFallAssessmentSequenceRef.current - current.sequence} clip(s)…`,
-            );
-          } else {
-            setFallCheckStatus("Assessing the latest sliding 4-second window…");
-          }
           const isCurrent = () =>
             monitoringRef.current && current.generation === generationRef.current;
           const hazardAssessmentDue =
-            !current.fallOnly && current.sequence >= nextHazardAssessmentSequenceRef.current;
+            current.sequence >= nextHazardAssessmentSequenceRef.current;
           if (hazardAssessmentDue) {
             nextHazardAssessmentSequenceRef.current =
               current.sequence + HAZARD_CHECK_STRIDE_SEGMENTS;
@@ -183,7 +143,6 @@ export default function HikerScreen() {
                 .then((response) => {
                   if (isCurrent()) {
                     setEvents((previous) => [response.event, ...previous].slice(0, 8));
-                    setCaptureStatus("Recording and analyzing live segments");
                     const warning = response.speak[0];
                     console.info(
                       `Hazard check: count=${response.event.hazards.length} warning=${warning?.say ?? "none"} latency_ms=${response.event.latency_ms}`,
@@ -192,9 +151,6 @@ export default function HikerScreen() {
                     const readout = signHistoryRef.current.acceptsResult(signSourceStartedAt)
                       ? buildSignReadout(response.event.sign)
                       : null;
-                    if (readout && Date.now() - signSourceStartedAt <= 10_000) {
-                      setLastSign(readout.chunks.join(" "));
-                    }
                     if (warning && !checkinTriggeredRef.current) {
                       void speakWarning(warning.say);
                     } else if (readout && !checkinTriggeredRef.current) {
@@ -220,7 +176,6 @@ export default function HikerScreen() {
                   if (isCurrent()) {
                     const message = error instanceof Error ? error.message : "Clip analysis failed";
                     setNotice(`Could not analyze the latest trail clip: ${message}`);
-                    setCaptureStatus("Camera is recording; backend analysis is unavailable");
                   }
                   throw error;
                 })
@@ -231,7 +186,6 @@ export default function HikerScreen() {
             .then((result) => {
               if (!isCurrent()) return result;
               if (fallAssessmentDue) {
-                setFallResult(result);
                 console.info(
                   `Fall result: fell=${result.fell} confidence=${result.confidence.toFixed(3)} latency_ms=${Date.now() - fallRequestStartedAt}`,
                 );
@@ -241,13 +195,6 @@ export default function HikerScreen() {
                     current.sequence + FALL_CHECK_STRIDE_SEGMENTS,
                   );
                 }
-                setFallCheckStatus("Latest sliding 4-second window assessed");
-              } else {
-                const remaining = Math.max(
-                  1,
-                  nextFallAssessmentSequenceRef.current - current.sequence,
-                );
-                setFallCheckStatus(`Collecting clips; next fall assessment in ${remaining} second(s)`);
               }
               if (result.fell === "yes" && !checkinTriggeredRef.current) {
                 console.info(
@@ -260,32 +207,23 @@ export default function HikerScreen() {
             .catch((error: unknown) => {
               if (isCurrent()) {
                 const message = error instanceof Error ? error.message : "Fall check failed";
-                setFallCheckStatus(`Fall check failed: ${message}`);
+                setNotice(`Could not check for a fall: ${message}`);
               }
               throw error;
             });
 
           await Promise.allSettled([hazardTask, fallTask]);
           deleteRecordedClip(current.uri);
-          if (monitoringRef.current && current.generation === generationRef.current) {
-            const queued = pendingClipsRef.current.length;
-            setCaptureStatus(
-              queued === 0
-              ? "Recording one-second clips for sliding windows"
-              : `${queued} one-second clip${queued === 1 ? "" : "s"} queued for analysis`,
-            );
-          }
         }
         processingRef.current = false;
       })().catch((error: unknown) => {
         processingRef.current = false;
         const message = error instanceof Error ? error.message : "Clip processing failed";
-        setFallCheckStatus(`Clip processing failed: ${message}`);
+        setNotice(`Clip processing failed: ${message}`);
       });
     };
 
     const captureLoop = async () => {
-      setCaptureStatus("Recording one-second clips for sliding windows");
       while (active) {
         try {
           const recorded = await camera.recordAsync({
@@ -300,7 +238,6 @@ export default function HikerScreen() {
         } catch {
           if (!active) break;
           setNotice("Camera recording stopped. Stop monitoring and start again to retry.");
-          setCaptureStatus("Camera recording stopped");
           monitoringRef.current = false;
           setLive(false);
           setCameraReady(false);
@@ -314,7 +251,7 @@ export default function HikerScreen() {
       active = false;
       camera.stopRecording();
     };
-  }, [live, cameraReady, fallOnlyMode, sessionId, startFallCheckin]);
+  }, [live, cameraReady, sessionId, startFallCheckin]);
 
   useEffect(() => () => {
     monitoringRef.current = false;
@@ -330,7 +267,6 @@ export default function HikerScreen() {
       cameraRef.current?.stopRecording();
       setLive(false);
       setCameraReady(false);
-      setCaptureStatus("Monitoring is off");
       stopWarningSpeech();
       return;
     }
@@ -344,13 +280,10 @@ export default function HikerScreen() {
       monitoringRef.current = true;
       checkinTriggeredRef.current = false;
       signHistoryRef.current.reset();
-      setLastSign(null);
       clipSequenceRef.current = 0;
       nextFallAssessmentSequenceRef.current = FALL_WINDOW_SEGMENTS - 1;
       nextHazardAssessmentSequenceRef.current = HAZARD_CHECK_STRIDE_SEGMENTS - 1;
       setCameraReady(false);
-      setFallResult(null);
-      setFallCheckStatus("Waiting to fill the first 4-second window");
       setLive(true);
       setNotice(micPermission.granted ? null : "Microphone is off. Fall checks will use video only.");
     } else {
@@ -358,11 +291,15 @@ export default function HikerScreen() {
     }
   };
 
-  const latestEvent = events[0];
-  const latestHazard = latestEvent?.hazards[0];
-  const statusTitle = fallOnlyMode
-    ? "Fall-only test"
-    : latestHazard?.say ?? (latestEvent ? "No hazard detected" : "Ready to monitor");
+  const recentHazards = events
+    .flatMap((event) => event.hazards.map((hazard, index) => ({
+      id: `${event.clip_id}-${index}`,
+      say: hazard.say,
+    })))
+    .slice(0, 3);
+  const recentSigns = events
+    .flatMap((event) => event.sign ? [{ id: event.clip_id, say: event.sign.say }] : [])
+    .slice(0, 3);
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {live ? <KeepCameraAwake /> : null}
@@ -401,13 +338,6 @@ export default function HikerScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
-          {lastSign ? (
-            <View style={styles.notice}>
-              <Text style={styles.noticeText}>Last sign detected</Text>
-              <Text style={styles.noticeText}>{lastSign}</Text>
-            </View>
-          ) : null}
-
           {notice ? (
             <View style={styles.notice}>
               <Text style={styles.noticeText}>{notice}</Text>
@@ -418,22 +348,42 @@ export default function HikerScreen() {
             // Frame S3 status zone, under the banner, until the SOS is cancelled.
             <View style={[styles.statusCard, styles.statusCardSos]}>
               <Text style={[styles.eyebrow, styles.sosText]}>SOS</Text>
-              <Text style={[lowVision ? styles.lowVisionText : styles.statusTitle, styles.sosText]}>{SOS_TEXT}</Text>
+              <Text style={[styles.statusTitle, styles.sosText]}>{SOS_TEXT}</Text>
             </View>
           ) : (
-            <View style={styles.statusCard}>
-              <Text style={styles.eyebrow}>
-                {lowVision ? "LOW-VISION VIEW" : fallOnlyMode ? "FALL TEST" : "HIKE STATUS"}
-              </Text>
-              <Text accessibilityLiveRegion="polite" style={lowVision ? styles.lowVisionText : styles.statusTitle}>
-                {statusTitle}
-              </Text>
-              <Text style={styles.statusBody}>
-                {live
-                  ? captureStatus
-                  : fallOnlyMode
-                    ? "Test fall detection indoors with a controlled staged movement."
-                    : "Start monitoring to analyze the trail from the live camera."}
+            <View style={styles.safetyCard}>
+              <Text style={styles.eyebrow}>TRAIL HAZARDS AND SIGNS</Text>
+              <Text style={styles.sectionTitle}>Recent hazards</Text>
+              {recentHazards.length > 0 ? (
+                recentHazards.map((hazard) => (
+                  <View key={hazard.id} style={styles.hazardRow}>
+                    <Text style={styles.hazardBullet}>•</Text>
+                    <Text style={styles.hazardText}>{hazard.say}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.rowSubtitle}>
+                  {events.length > 0
+                    ? "No hazards detected in the latest check."
+                    : live
+                      ? "Looking for hazards…"
+                      : "Start monitoring to see hazards here."}
+                </Text>
+              )}
+              <View style={styles.divider} />
+              <Text style={styles.sectionTitle}>Trail signs</Text>
+              {recentSigns.length > 0 ? (
+                recentSigns.map((sign) => (
+                  <View key={sign.id} style={styles.hazardRow}>
+                    <Text style={styles.signBullet}>SIGN</Text>
+                    <Text style={styles.hazardText}>{sign.say}</Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.rowSubtitle}>No trail signs read yet.</Text>
+              )}
+              <Text style={styles.safetyHint}>
+                {live ? "Camera monitoring is on." : "Camera monitoring is off."}
               </Text>
             </View>
           )}
@@ -441,7 +391,7 @@ export default function HikerScreen() {
           <View style={styles.previewCard}>
             <View style={styles.previewHeader}>
               <Text style={styles.sectionTitle}>
-                {fallOnlyMode ? "Fall-test camera" : live ? "Live trail camera" : "Trail camera"}
+                {live ? "Live trail camera" : "Trail camera"}
               </Text>
               {live ? <Text style={styles.liveTag}>LIVE</Text> : null}
             </View>
@@ -458,81 +408,18 @@ export default function HikerScreen() {
             ) : (
               <View style={styles.previewPlaceholder}>
                 <Text style={styles.previewIcon}>◉</Text>
-              <Text style={styles.previewText}>Camera is off</Text>
+                <Text style={styles.previewText}>Camera is off</Text>
                 <Text style={styles.previewHint}>
-                  {fallOnlyMode
-                    ? "No hike needed. Point the camera at a person for a safe, staged fall test."
-                    : "When active, TrailSense records short clips and analyzes them as you hike."}
+                  When active, TrailSense records short clips and analyzes them as you hike.
                 </Text>
               </View>
             )}
             <View style={styles.actionRow}>
               <ActionButton
-                label={live ? "Stop monitoring" : fallOnlyMode ? "Start fall test" : "Start trail monitoring"}
+                label={live ? "Stop monitoring" : "Start trail monitoring"}
                 onPress={() => void toggleMonitoring()}
               />
             </View>
-          </View>
-
-          <View style={styles.controlsCard}>
-            <ControlRow label="Low-vision display" value={lowVision} onChange={setLowVision} />
-            {!fallOnlyMode ? (
-              <>
-                <View style={styles.divider} />
-                <Pressable accessibilityRole="button" onPress={() => setShowLog((open) => !open)} style={styles.rowButton}>
-                  <View>
-                    <Text style={styles.rowTitle}>Trail events</Text>
-                    <Text style={styles.rowSubtitle}>{events.length === 0 ? "No events yet" : `${events.length} recent clip analyses`}</Text>
-                  </View>
-                  <Text style={styles.rowAction}>{showLog ? "Hide" : "Show"}</Text>
-                </Pressable>
-                {showLog ? (
-                  events.length ? events.map((event) => (
-                    <View key={event.clip_id} style={styles.eventRow}>
-                      <Text style={styles.eventTitle}>{event.hazards[0]?.say ?? "No hazard detected"}</Text>
-                      <Text style={styles.rowSubtitle}>{event.scene}</Text>
-                    </View>
-                  )) : <Text style={styles.logEmpty}>Warnings and trail events will appear here.</Text>
-                ) : null}
-              </>
-            ) : null}
-          </View>
-
-          <View style={styles.bottomActions}>
-            <View style={styles.fallTestCard}>
-              <Text style={styles.sectionTitle}>{fallOnlyMode ? "Indoor fall-only test" : "Live safety monitoring"}</Text>
-              <Text style={styles.rowSubtitle}>
-                {fallOnlyMode
-                  ? "One-second clips build a rolling 4-second fall window. TrailSense checks it every 3 seconds, retaining 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."
-                  : "Hazard requests run every 3 seconds while falls are checked in overlapping 4-second windows. Model responses may lag. Speech plays only for a new detected hazard; a suspected fall interrupts it and opens the check-in. Older queued clips are dropped if analysis falls behind. This test will not place a call."}
-              </Text>
-              <Text accessibilityLiveRegion="polite" style={styles.fallStatus}>{fallCheckStatus}</Text>
-              {fallResult ? (
-                <Text accessibilityLiveRegion="polite" style={styles.fallResult}>
-                  Latest result: {fallResult.fell.toUpperCase()} · {Math.round(fallResult.confidence * 100)}% confidence
-                </Text>
-              ) : null}
-            </View>
-            {__DEV__ ? (
-              <View style={styles.devCard}>
-                <Text style={styles.sectionTitle}>Developer: test check-in</Text>
-                <ControlRow
-                  label="Real SOS"
-                  value={realSos}
-                  onChange={setRealSos}
-                  subtitle={
-                    realSos
-                      ? "On: calls the backend, which can phone the emergency contact"
-                      : "Off: fake SOS, nobody is contacted"
-                  }
-                />
-                <ActionButton
-                  label={realSos ? "Test check-in (real SOS)" : "Test check-in (fake SOS)"}
-                  onPress={startDevCheckin}
-                  secondary
-                />
-              </View>
-            ) : null}
           </View>
         </ScrollView>
       )}
@@ -558,56 +445,14 @@ function KeepCheckinAwake() {
   return null;
 }
 
-function ActionButton({ label, onPress, secondary = false }: { label: string; onPress: () => void; secondary?: boolean }) {
+function ActionButton({ label, onPress }: { label: string; onPress: () => void }) {
   return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ pressed }) => [styles.actionButton, secondary && styles.actionButtonSecondary, pressed && styles.pressed]}
+      style={({ pressed }) => [styles.actionButton, pressed && styles.pressed]}
     >
-      <Text style={[styles.actionButtonText, secondary && styles.actionButtonTextSecondary]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function ControlRow({
-  label,
-  value,
-  onChange,
-  subtitle,
-  disabled = false,
-}: {
-  label: string;
-  value: boolean;
-  onChange: (value: boolean) => void;
-  subtitle?: string;
-  disabled?: boolean;
-}) {
-  const description = subtitle ?? (value ? "Large high-contrast guidance" : "Standard guidance view");
-  // The whole row toggles, so the hit area is the row (76 tall), not just the small switch.
-  return (
-    <Pressable
-      accessibilityRole="switch"
-      accessibilityLabel={label}
-      accessibilityHint={description}
-      accessibilityState={{ checked: value, disabled }}
-      disabled={disabled}
-      onPress={() => onChange(!value)}
-      style={styles.controlRow}
-    >
-      <View style={styles.controlText}>
-        <Text style={styles.rowTitle}>{label}</Text>
-        <Text style={styles.rowSubtitle}>{description}</Text>
-      </View>
-      <Switch
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        value={value}
-        onValueChange={onChange}
-        disabled={disabled}
-        trackColor={{ false: COLORS.divider, true: COLORS.accent }}
-        thumbColor={COLORS.text}
-      />
+      <Text style={styles.actionButtonText}>{label}</Text>
     </Pressable>
   );
 }
@@ -636,8 +481,6 @@ const styles = StyleSheet.create({
   statusCard: { padding: 20, borderRadius: 18, backgroundColor: COLORS.accent, minHeight: 176, justifyContent: "center" },
   eyebrow: { color: COLORS.text, fontSize: 13, fontWeight: "800", letterSpacing: 1.2 },
   statusTitle: { color: COLORS.text, fontSize: 34, lineHeight: 40, fontWeight: "800", marginTop: 8 },
-  lowVisionText: { color: COLORS.text, fontSize: 48, lineHeight: 56, fontWeight: "800", marginTop: 8 },
-  statusBody: { color: COLORS.text, fontSize: 16, lineHeight: 23, marginTop: 8 },
   previewCard: { overflow: "hidden", borderRadius: 18, borderWidth: 1, borderColor: COLORS.divider, backgroundColor: COLORS.surface },
   previewHeader: { minHeight: 54, paddingHorizontal: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   sectionTitle: { color: COLORS.text, fontSize: 18, fontWeight: "700" },
@@ -649,26 +492,16 @@ const styles = StyleSheet.create({
   previewHint: { color: COLORS.muted, fontSize: 14, lineHeight: 20, textAlign: "center", marginTop: 6 },
   actionRow: { flexDirection: "row", padding: 12, gap: 10 },
   actionButton: { minHeight: 64, minWidth: 64, flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 14, borderRadius: 14, backgroundColor: COLORS.accent },
-  actionButtonSecondary: { backgroundColor: COLORS.surfaceRaised, borderWidth: 1, borderColor: COLORS.divider },
   actionButtonText: { color: COLORS.text, fontSize: 16, fontWeight: "700", textAlign: "center" },
-  actionButtonTextSecondary: { color: COLORS.bright },
   pressed: { opacity: 0.78 },
-  controlsCard: { borderRadius: 18, backgroundColor: COLORS.surface, paddingHorizontal: 16 },
-  controlRow: { minHeight: 76, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
-  controlText: { flex: 1 },
-  rowButton: { minHeight: 76, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  rowTitle: { color: COLORS.text, fontSize: 17, fontWeight: "700" },
   rowSubtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
-  rowAction: { color: COLORS.bright, fontSize: 15, fontWeight: "700" },
   divider: { height: 1, backgroundColor: COLORS.divider },
-  eventRow: { borderTopWidth: 1, borderColor: COLORS.divider, paddingVertical: 12 },
-  eventTitle: { color: COLORS.text, fontSize: 16, fontWeight: "700" },
-  logEmpty: { color: COLORS.muted, fontSize: 15, lineHeight: 22, paddingBottom: 16 },
-  bottomActions: { gap: 10 },
-  fallTestCard: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
-  fallStatus: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
-  fallResult: { color: COLORS.bright, fontSize: 18, fontWeight: "800" },
+  safetyCard: { gap: 10, padding: 18, borderRadius: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
+  hazardRow: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
+  hazardBullet: { color: COLORS.bright, fontSize: 20, lineHeight: 23, fontWeight: "800" },
+  signBullet: { color: COLORS.bright, fontSize: 10, lineHeight: 23, fontWeight: "900", width: 34 },
+  hazardText: { color: COLORS.text, flex: 1, fontSize: 16, lineHeight: 23 },
+  safetyHint: { color: COLORS.muted, fontSize: 13, marginTop: 2 },
   statusCardSos: { backgroundColor: COLORS.dark },
   sosText: { color: COLORS.warning },
-  devCard: { gap: 4, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
 });
