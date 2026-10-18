@@ -4,7 +4,7 @@ import { SecondaryButton } from "@/components/ui/SecondaryButton";
 export type StatusBannerProps = {
   tone: "clear" | "warn" | "sos" | "offline";
   text: string;
-  action?: { label: string; onPress: () => void };
+  action?: { label: string; onPress: () => void; ariaLabel?: string };
   ariaLabel?: string;
 };
 
@@ -23,7 +23,11 @@ export function StatusBanner({ tone, text, action, ariaLabel }: StatusBannerProp
           <Icon name="alert" size={32} strokeWidth={2.6} />
           <span className="text-label font-bold">{text}</span>
         </div>
-        <SecondaryButton label={action.label} onPress={action.onPress} />
+        <SecondaryButton
+          label={action.label}
+          onPress={action.onPress}
+          {...(action.ariaLabel ? { ariaLabel: action.ariaLabel } : {})}
+        />
       </div>
     );
   }

@@ -24,10 +24,12 @@ export function PillToggle({ label, checked, onChange, tone = "dark", ariaLabel 
       aria-label={ariaLabel ?? label + " mode, " + (checked ? "on" : "off")}
       onClick={() => onChange(!checked)}
       className={
-        "flex min-h-touch min-w-0 items-center justify-center gap-1.5 rounded-pill border-[3px] px-1.5 " + look
+        "flex min-h-touch min-w-0 items-center justify-center rounded-pill border-[3px] px-1.5 " +
+        (tone === "yellow" ? "gap-2.5 " : "gap-1.5 ") +
+        look
       }
     >
-      {checked ? <Icon name="check" size={20} strokeWidth={3} /> : null}
+      {checked ? <Icon name="check" size={tone === "yellow" ? 24 : 20} strokeWidth={3} /> : null}
       <span>{label}</span>
     </button>
   );

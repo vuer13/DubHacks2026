@@ -6,21 +6,31 @@
 import type { HealthStatus } from "@/components/ui/HealthDot";
 import type { MicButtonState } from "@/components/ui/MicButton";
 import type { SignCardProps } from "@/components/ui/SignCard";
-import type { ClipEvent, SpeakEvent } from "@/lib/schema";
+import type { ClipEvent, SafetyEvent, SpeakEvent } from "@/lib/schema";
 
 /** Handoff: the severity fill lasts 8 s, then falls back to stale. */
 export const CLEAR_TIMEOUT_S = 8;
 /** A SpeakEvent belongs to a ClipEvent when it fires up to this long after the clip ends. */
 export const SPEAK_MATCH_S = 1.5;
 export const LOG_LIMIT = 50;
+/** Fall check-in countdown length (handoff and Step B5: 20 seconds). */
+export const CHECKIN_SECONDS = 20;
+/** How long "Cancelled. Help is not being called." stays up (frame S2). */
+export const CANCELLED_DISPLAY_MS = 3000;
 
 export const READY_TEXT = "Ready. Tap the mic to talk.";
 export const TRAIL_CLEAR_TEXT = "Trail clear";
 export const OFFLINE_TEXT = "Working offline, pre-recorded warnings only.";
+export const CHECKIN_TEXT = "Are you okay? Say anything to cancel.";
+export const CHECKIN_FOOTER_TEXT = "Tap anywhere or speak to cancel";
+export const CANCELLED_TEXT = "Cancelled. Help is not being called.";
+export const SOS_TEXT = "Calling for help now.";
 
 export type HikerMode = "idle" | "replay" | "live";
 export type AgentState = "off" | "listening" | "speaking";
 export type Health = "ok" | "down" | "unknown";
+
+export type CheckinState = "none" | "counting" | "cancelled" | "sos_sent";
 
 export type LogEntry = { speak: SpeakEvent; event?: ClipEvent };
 
@@ -35,6 +45,10 @@ export type HikerState = {
   lowVision: boolean;
   logOpen: boolean;
   analysing: boolean;
+  checkin: CheckinState;
+  countdownSeconds: number;
+  /** Wall-clock ms when the SOS went out, for "Help contacted at <time>". */
+  sosSentAt?: number;
 };
 
 export type HikerAction =
@@ -48,7 +62,14 @@ export type HikerAction =
   | { type: "log_toggled"; open?: boolean }
   | { type: "analysing_changed"; analysing: boolean }
   | { type: "video_loaded" }
-  | { type: "reset" };
+  | { type: "reset" }
+  // Fall check-in and SOS. Time-dependent actions carry the wall clock so the reducer stays pure.
+  | { type: "checkin_started"; seconds?: number }
+  | { type: "checkin_tick"; at: number }
+  | { type: "checkin_cancelled" }
+  | { type: "checkin_cleared" }
+  | { type: "sos_sent"; at: number }
+  | { type: "sos_cancelled" };
 
 export const initialHikerState: HikerState = {
   mode: "idle",
@@ -58,6 +79,8 @@ export const initialHikerState: HikerState = {
   lowVision: false,
   logOpen: false,
   analysing: false,
+  checkin: "none",
+  countdownSeconds: CHECKIN_SECONDS,
 };
 
 function matchingEvent(speak: SpeakEvent, event: ClipEvent | undefined): ClipEvent | undefined {
@@ -107,7 +130,57 @@ export function hikerReducer(state: HikerState, action: HikerAction): HikerState
       };
     case "reset":
       return { ...initialHikerState, health: state.health };
+    case "checkin_started":
+      // A check-in never interrupts an SOS that already went out.
+      if (state.checkin === "sos_sent") return state;
+      return { ...state, checkin: "counting", countdownSeconds: action.seconds ?? CHECKIN_SECONDS };
+    case "checkin_tick": {
+      if (state.checkin !== "counting") return state;
+      const left = Math.max(0, state.countdownSeconds - 1);
+      return left === 0
+        ? { ...state, checkin: "sos_sent", countdownSeconds: 0, sosSentAt: action.at }
+        : { ...state, countdownSeconds: left };
+    }
+    case "checkin_cancelled":
+      return state.checkin === "counting" ? { ...state, checkin: "cancelled" } : state;
+    case "checkin_cleared":
+      return state.checkin === "cancelled" ? { ...state, checkin: "none", countdownSeconds: CHECKIN_SECONDS } : state;
+    case "sos_sent":
+      return { ...state, checkin: "sos_sent", countdownSeconds: 0, sosSentAt: action.at };
+    case "sos_cancelled": {
+      if (state.checkin !== "sos_sent") return state;
+      const { sosSentAt: _cleared, ...rest } = state;
+      return { ...rest, checkin: "none", countdownSeconds: CHECKIN_SECONDS };
+    }
   }
+}
+
+/**
+ * Maps the safety events in docs/shared-context.md onto reducer actions so
+ * Step B5 can dispatch them directly. `wallClockMs` stamps sos_sent, because
+ * the event's `t` is session time, not a time of day. Other event types do
+ * not change these screens and map to null.
+ */
+export function safetyEventToAction(event: SafetyEvent, wallClockMs: number): HikerAction | null {
+  switch (event.type) {
+    case "fall_checkin_started":
+      return { type: "checkin_started", seconds: event.timeout_s };
+    case "fall_cancelled":
+      return { type: "checkin_cancelled" };
+    case "sos_sent":
+      return { type: "sos_sent", at: wallClockMs };
+    case "fall_suspected":
+    case "off_trail":
+      return null;
+  }
+}
+
+/** "2:14 pm", the format the S3 frame uses. */
+export function formatClockTime(ms: number): string {
+  return new Date(ms)
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+    .replace("AM", "am")
+    .replace("PM", "pm");
 }
 
 // ---------------------------------------------------------------- selector

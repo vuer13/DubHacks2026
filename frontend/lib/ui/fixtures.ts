@@ -207,6 +207,25 @@ const logEight: LogEntry[] = [
   fork,
 ];
 
+// Low-vision frame LV5: a severity 2 drop-off on the left (point x 310), so the arrow steers right.
+export const edgeLeftEvent = clip({
+  clip_id: "clip_0057",
+  t_start: 168.0,
+  t_end: 171.0,
+  hazards: [
+    { type: "drop_off", severity: 2, direction: "11", distance: "mid", say: "Drop-off, left", point: [310, 640] },
+  ],
+  trail_state: "narrowing",
+  surface: "packed dirt",
+  scene: "Trail narrows with a slope falling away on the left.",
+  model: "perceptron-mk1.5",
+  latency_ms: 1770,
+});
+export const edgeLeftSpeak = speak({ t: 171.5, priority: 2, say: "Drop-off, left", earcon: "caution", haptic: "double" });
+
+/** Local 2:14 pm, the time frame S3 shows, independent of the machine's timezone. */
+export const SOS_SENT_AT = new Date(2026, 9, 17, 14, 14).getTime();
+
 export type HikerFixture = {
   /** Frame label from the handoff state map. */
   frame: string;
@@ -323,5 +342,101 @@ export const hikerFixtures: HikerFixture[] = [
     state: { ...initialHikerState, health: "ok" },
     now: 0,
     sessionId: DEMO_SESSION_ID,
+  },
+  // D3: fall check-in and SOS.
+  {
+    frame: "S1 Check-in started",
+    png: "safety-checkin-started.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: rootsSpeak,
+      lastEvent: rootsEvent,
+      log: logToFork,
+      checkin: "counting",
+      countdownSeconds: 14,
+    },
+    now: 210,
+  },
+  {
+    frame: "S2 Cancelled",
+    png: "safety-checkin-cancelled.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: looseRockSpeak,
+      lastEvent: clearAfterRockEvent,
+      log: [entry(mudSpeak, mudEvent), roots, rock],
+      checkin: "cancelled",
+      countdownSeconds: 9,
+    },
+    now: 220,
+  },
+  {
+    frame: "S3 SOS sent",
+    png: "safety-sos-sent.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: looseRockSpeak,
+      lastEvent: clearAfterRockEvent,
+      log: logRootsRock,
+      checkin: "sos_sent",
+      countdownSeconds: 0,
+      sosSentAt: SOS_SENT_AT,
+    },
+    now: 233,
+  },
+  // D3: low-vision mode.
+  {
+    frame: "LV4 Trail clear",
+    png: "lowvision-clear.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: looseRockSpeak,
+      lastEvent: clearAfterRockEvent,
+      log: logRootsRock,
+      lowVision: true,
+    },
+    now: 95,
+  },
+  {
+    frame: "LV5 Hazard left",
+    png: "lowvision-hazard-left.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: edgeLeftSpeak,
+      lastEvent: edgeLeftEvent,
+      log: [entry(edgeLeftSpeak, edgeLeftEvent)],
+      lowVision: true,
+    },
+    now: 172,
+  },
+  {
+    frame: "LV6 Stop",
+    png: "lowvision-stop.png",
+    state: {
+      ...initialHikerState,
+      health: "ok",
+      mode: "replay",
+      lastSpeak: dropOffSpeak,
+      lastEvent: dropOffEvent,
+      log: [entry(dropOffSpeak, dropOffEvent)],
+      lowVision: true,
+    },
+    now: 37,
+  },
+  {
+    frame: "LV7 Fork",
+    png: "lowvision-fork.png",
+    state: { ...initialHikerState, health: "ok", mode: "replay", lastSpeak: forkSpeak, lastEvent: forkEvent, log: logToFork, lowVision: true },
+    now: 130,
   },
 ];

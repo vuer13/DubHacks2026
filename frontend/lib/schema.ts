@@ -93,6 +93,66 @@ export const SpeakEventSchema = z
   })
   .strict();
 
+// Safety events, docs/shared-context.md "Safety events".
+export const FallSuspectedEventSchema = z
+  .object({
+    type: z.literal("fall_suspected"),
+    t: z.number().nonnegative(),
+    signals: z
+      .object({
+        motion_spike: z.boolean(),
+        static_after: z.boolean(),
+        vlm: z.enum(["yes", "no", "unsure"]),
+      })
+      .strict(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
+export const FallCheckinStartedEventSchema = z
+  .object({
+    type: z.literal("fall_checkin_started"),
+    t: z.number().nonnegative(),
+    timeout_s: z.number().int().positive(),
+  })
+  .strict();
+
+export const FallCancelledEventSchema = z
+  .object({
+    type: z.literal("fall_cancelled"),
+    t: z.number().nonnegative(),
+    // The doc example shows "voice"; the check-in overlay also cancels on a tap.
+    by: z.enum(["voice", "tap"]),
+  })
+  .strict();
+
+export const SosSentEventSchema = z
+  .object({
+    type: z.literal("sos_sent"),
+    t: z.number().nonnegative(),
+    to: z.string().min(1),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+  })
+  .strict();
+
+export const OffTrailEventSchema = z
+  .object({
+    type: z.literal("off_trail"),
+    t: z.number().nonnegative(),
+    distance_m: z.number().nonnegative(),
+    side: z.enum(["left", "right"]),
+  })
+  .strict();
+
+export const SafetyEventSchema = z.discriminatedUnion("type", [
+  FallSuspectedEventSchema,
+  FallCheckinStartedEventSchema,
+  FallCancelledEventSchema,
+  SosSentEventSchema,
+  OffTrailEventSchema,
+]);
+
 export const HealthResponseSchema = z
   .object({
     ok: z.boolean(),
@@ -111,3 +171,4 @@ export type Hazard = z.infer<typeof HazardSchema>;
 export type SignReading = z.infer<typeof SignReadingSchema>;
 export type ClipEvent = z.infer<typeof ClipEventSchema>;
 export type SpeakEvent = z.infer<typeof SpeakEventSchema>;
+export type SafetyEvent = z.infer<typeof SafetyEventSchema>;

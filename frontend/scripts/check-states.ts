@@ -5,18 +5,35 @@
  * Run: npm run check:states
  */
 import { toEventRows } from "@/components/hiker/EventLog";
-import { DEMO_SESSION_ID, dropOffEvent, dropOffSpeak, forkEvent, hikerFixtures, mudEvent, rootsSpeak } from "@/lib/ui/fixtures";
+import { SafetyEventSchema } from "@/lib/schema";
 import {
+  DEMO_SESSION_ID,
+  SOS_SENT_AT,
+  dropOffEvent,
+  dropOffSpeak,
+  forkEvent,
+  hikerFixtures,
+  lynnLoopSign,
+  mudEvent,
+  rootsSpeak,
+} from "@/lib/ui/fixtures";
+import { arrowForHazard, forkGlyph, selectLowVisionView } from "@/lib/ui/lowvision";
+import {
+  CHECKIN_SECONDS,
   CLEAR_TIMEOUT_S,
   READY_TEXT,
   TRAIL_CLEAR_TEXT,
+  formatClockTime,
   hikerReducer,
   initialHikerState,
+  safetyEventToAction,
   selectHikerView,
   signView,
+  type HikerState,
   type HikerTone,
   type HikerView,
 } from "@/lib/ui/state";
+import { createWakeLockController } from "@/lib/wakelock";
 
 let failures = 0;
 let passes = 0;
@@ -76,8 +93,30 @@ const expected: Record<string, Expected> = {
   "12 Session QR": { tone: "clear", statusText: READY_TEXT },
 };
 
-check("twelve fixtures", hikerFixtures.length === 12, String(hikerFixtures.length));
+// D3 frames: check-in, SOS and low-vision. Written by hand from the frames.
+const d3Expected: Record<string, (state: HikerState, now: number) => string | null> = {
+  "S1 Check-in started": (st) => (st.checkin === "counting" && st.countdownSeconds === 14 ? null : "not counting from 14"),
+  "S2 Cancelled": (st) => (st.checkin === "cancelled" ? null : "not cancelled"),
+  "S3 SOS sent": (st) =>
+    st.checkin === "sos_sent" && st.sosSentAt !== undefined && formatClockTime(st.sosSentAt) === "2:14 pm" ? null : "sos time wrong",
+  "LV4 Trail clear": (st, now) => lv(st, now, "ahead", "Trail clear"),
+  "LV5 Hazard left": (st, now) => lv(st, now, "steer-right", "Drop-off, left"),
+  "LV6 Stop": (st, now) => lv(st, now, "stop", "Stop"),
+  "LV7 Fork": (st, now) => lv(st, now, "fork-right", "Fork ahead, right"),
+};
+function lv(state: HikerState, now: number, glyph: string, text: string): string | null {
+  const view = selectLowVisionView(state, now);
+  return state.lowVision && view.glyph === glyph && view.text === text ? null : "got " + view.glyph + " / " + view.text;
+}
+
+check("nineteen fixtures", hikerFixtures.length === 19, String(hikerFixtures.length));
 for (const fixture of hikerFixtures) {
+  const d3 = d3Expected[fixture.frame];
+  if (d3) {
+    const problem = d3(fixture.state, fixture.now);
+    check(fixture.frame, problem === null, problem ?? "");
+    continue;
+  }
   const want = expected[fixture.frame];
   if (!want) {
     check("expectation for " + fixture.frame, false);
@@ -152,8 +191,126 @@ check("video loaded clears events", s.mode === "replay" && s.log.length === 0 &&
 s = hikerReducer({ ...stopHeld, health: "ok", logOpen: true }, { type: "reset" });
 check("reset keeps health", s.health === "ok" && !s.logOpen && s.log.length === 0);
 
-if (failures > 0) {
-  console.error("\n" + failures + " check(s) failed, " + passes + " passed.");
-  process.exit(1);
+// Fall check-in and SOS reducer.
+let c = hikerReducer(initialHikerState, { type: "checkin_started" });
+check("check-in starts at the constant", c.checkin === "counting" && c.countdownSeconds === CHECKIN_SECONDS && CHECKIN_SECONDS === 20);
+c = hikerReducer(c, { type: "checkin_tick", at: 1 });
+check("tick counts down", c.countdownSeconds === CHECKIN_SECONDS - 1 && c.checkin === "counting");
+for (let i = 0; i < CHECKIN_SECONDS - 2; i += 1) c = hikerReducer(c, { type: "checkin_tick", at: 1000 + i });
+check("one second left", c.countdownSeconds === 1 && c.checkin === "counting");
+c = hikerReducer(c, { type: "checkin_tick", at: SOS_SENT_AT });
+check("zero sends SOS and records the time", c.checkin === "sos_sent" && c.countdownSeconds === 0 && c.sosSentAt === SOS_SENT_AT);
+check("tick after SOS is ignored", hikerReducer(c, { type: "checkin_tick", at: 5 }) === c);
+check("new check-in cannot override SOS", hikerReducer(c, { type: "checkin_started" }).checkin === "sos_sent");
+const sosOff = hikerReducer(c, { type: "sos_cancelled" });
+check("cancel SOS clears", sosOff.checkin === "none" && sosOff.sosSentAt === undefined);
+let k = hikerReducer(initialHikerState, { type: "checkin_started", seconds: 5 });
+check("custom length", k.countdownSeconds === 5);
+k = hikerReducer(k, { type: "checkin_cancelled" });
+check("cancel while counting", k.checkin === "cancelled");
+k = hikerReducer(k, { type: "checkin_cleared" });
+check("cleared returns to normal", k.checkin === "none" && k.countdownSeconds === CHECKIN_SECONDS);
+check("cancel when idle is ignored", hikerReducer(initialHikerState, { type: "checkin_cancelled" }) === initialHikerState);
+check("2:14 pm label", formatClockTime(SOS_SENT_AT) === "2:14 pm");
+
+// Safety events from docs/shared-context.md map to actions.
+const docEvents = [
+  { type: "fall_suspected", t: 212.0, signals: { motion_spike: true, static_after: true, vlm: "yes" }, confidence: 0.86 },
+  { type: "fall_checkin_started", t: 213.0, timeout_s: 20 },
+  { type: "fall_cancelled", t: 219.0, by: "voice" },
+  { type: "sos_sent", t: 233.0, to: "+1...", lat: 49.3, lng: -123.1 },
+  { type: "off_trail", t: 90.0, distance_m: 22, side: "left" },
+].map((event) => SafetyEventSchema.parse(event));
+const mapped = docEvents.map((event) => safetyEventToAction(event, SOS_SENT_AT));
+check("fall_suspected maps to nothing", mapped[0] === null);
+check("fall_checkin_started maps", JSON.stringify(mapped[1]) === JSON.stringify({ type: "checkin_started", seconds: 20 }));
+check("fall_cancelled maps", mapped[2]?.type === "checkin_cancelled");
+check("sos_sent maps with wall clock", JSON.stringify(mapped[3]) === JSON.stringify({ type: "sos_sent", at: SOS_SENT_AT }));
+check("off_trail maps to nothing", mapped[4] === null);
+let flow = initialHikerState;
+for (const action of mapped) if (action) flow = hikerReducer(flow, action);
+check("dispatched doc events end in sos_sent", flow.checkin === "sos_sent" && flow.sosSentAt === SOS_SENT_AT);
+
+// Low-vision direction rule (Step B6).
+check("x 310 -> arrow right", arrowForHazard({ severity: 2, direction: "12", point: [310, 700] }) === "steer-right");
+check("x 700 -> arrow left", arrowForHazard({ severity: 2, direction: "12", point: [700, 700] }) === "steer-left");
+check("x 500 -> ahead", arrowForHazard({ severity: 2, direction: "12", point: [500, 700] }) === "ahead");
+check("no point, 10 -> arrow right", arrowForHazard({ severity: 2, direction: "10" }) === "steer-right");
+check("no point, 11 -> arrow right", arrowForHazard({ severity: 1, direction: "11", point: null }) === "steer-right");
+check("no point, 2 -> arrow left", arrowForHazard({ severity: 2, direction: "2" }) === "steer-left");
+check("no point, 12 -> ahead", arrowForHazard({ severity: 2, direction: "12" }) === "ahead");
+check("severity 3 -> stop", arrowForHazard({ severity: 3, direction: "10", point: [100, 700] }) === "stop");
+check("fork with right sign highlights right", forkGlyph(lynnLoopSign).kind === "fork-right" && forkGlyph(lynnLoopSign).side === "right");
+check("fork with left sign highlights left", forkGlyph({ ...lynnLoopSign, arrows: [{ label: "Ridge", direction: "left" }] }).kind === "fork-left");
+check("fork without sign is neutral", forkGlyph(null).kind === "fork" && forkGlyph(undefined).side === undefined);
+const forkNoSign = hikerReducer(
+  hikerReducer(initialHikerState, { type: "clip_event_received", event: { ...forkEvent, sign: null } }),
+  { type: "speak_fired", speak: { t: 129.5, priority: 2, say: "Fork ahead", earcon: "fork", haptic: "double" } },
+);
+check("neutral fork text", selectLowVisionView(forkNoSign, 130).text === "Fork ahead" && selectLowVisionView(forkNoSign, 130).glyph === "fork");
+check("low vision clear when nothing active", selectLowVisionView(initialHikerState, 0).glyph === "ahead");
+
+// Wake lock controller, with fakes.
+async function wakeLockChecks(): Promise<void> {
+  const listeners: Array<() => void> = [];
+  const doc = {
+    visibilityState: "visible",
+    addEventListener: (_type: "visibilitychange", fn: () => void) => listeners.push(fn),
+    removeEventListener: (_type: "visibilitychange", fn: () => void) => {
+      const i = listeners.indexOf(fn);
+      if (i >= 0) listeners.splice(i, 1);
+    },
+  };
+  let requests = 0;
+  const sentinels: Array<{ released: boolean; release: () => Promise<void> }> = [];
+  const nav = {
+    wakeLock: {
+      request: async () => {
+        requests += 1;
+        const sentinel = { released: false, release: async () => void (sentinel.released = true) };
+        sentinels.push(sentinel);
+        return sentinel;
+      },
+    },
+  };
+  const wl = createWakeLockController(nav, doc);
+  await wl.setActive(true);
+  check("wake lock acquired when active", requests === 1 && wl.isHeld());
+  await wl.setActive(true);
+  check("no duplicate request", requests === 1);
+  sentinels[0]!.released = true; // the browser drops it when the page hides
+  doc.visibilityState = "hidden";
+  listeners.forEach((fn) => fn());
+  check("not re-requested while hidden", requests === 1);
+  doc.visibilityState = "visible";
+  listeners.forEach((fn) => fn());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  check("re-requested on visible", requests === 2 && wl.isHeld());
+  await wl.setActive(false);
+  check("released when inactive", !wl.isHeld() && sentinels[1]!.released);
+  listeners.forEach((fn) => fn());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  check("inactive ignores visibility", requests === 2);
+  await wl.dispose();
+  check("dispose removes listener", listeners.length === 0);
+
+  const unsupported = createWakeLockController({}, doc);
+  await unsupported.setActive(true);
+  check("unsupported is a no-op", !unsupported.isHeld());
+  await unsupported.dispose();
+
+  const denied = createWakeLockController(
+    { wakeLock: { request: async () => Promise.reject(new Error("NotAllowedError")) } },
+    doc,
+  );
+  await denied.setActive(true);
+  check("denied request does not throw", !denied.isHeld());
+  await denied.dispose();
 }
-console.log("OK: " + passes + " state checks passed across " + hikerFixtures.length + " frames.");
+void wakeLockChecks().then(() => {
+  if (failures > 0) {
+    console.error("\n" + failures + " check(s) failed, " + passes + " passed.");
+    process.exit(1);
+  }
+  console.log("OK: " + passes + " state checks passed across " + hikerFixtures.length + " frames.");
+});

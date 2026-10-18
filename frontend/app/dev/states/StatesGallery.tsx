@@ -2,6 +2,7 @@
 
 import { HikerScreen, type HikerScreenHandlers } from "@/components/hiker/HikerScreen";
 import { hikerFixtures } from "@/lib/ui/fixtures";
+import { selectLowVisionView } from "@/lib/ui/lowvision";
 import { selectHikerView } from "@/lib/ui/state";
 
 const noop = () => {};
@@ -12,6 +13,8 @@ const handlers: HikerScreenHandlers = {
   onMicPress: noop,
   onLiveChange: noop,
   onLowVisionChange: noop,
+  onCheckinCancel: noop,
+  onSosCancel: noop,
 };
 
 export function StatesGallery() {
@@ -28,6 +31,7 @@ export function StatesGallery() {
             <HikerScreen
               state={fixture.state}
               view={selectHikerView(fixture.state, fixture.now)}
+              lowVision={selectLowVisionView(fixture.state, fixture.now)}
               {...(fixture.sessionId ? { sessionId: fixture.sessionId } : {})}
               framed
               handlers={handlers}

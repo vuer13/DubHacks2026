@@ -17,6 +17,12 @@ export type StatusZoneProps = {
    * prop for it; the caller decides (frame 8, a long agent reply).
    */
   childrenNeedRoom?: boolean;
+  /**
+   * Keep the 56px hero for system messages. Frame S2 shows the six-word
+   * "Cancelled. Help is not being called." at 56px; the six-word drop is for
+   * spoken hazard lines.
+   */
+  fullSizeHero?: boolean;
   ariaLabel?: string;
 };
 
@@ -41,8 +47,17 @@ export function heroUsesMinSize(text: string, tone: StatusTone): boolean {
   return tone !== "plain" && wordCount(text) >= 6;
 }
 
-export function StatusZone({ text, tone, word, glyph, children, childrenNeedRoom = false, ariaLabel }: StatusZoneProps) {
-  const heroSize = childrenNeedRoom || heroUsesMinSize(text, tone) ? "text-hero-min" : "text-hero";
+export function StatusZone({
+  text,
+  tone,
+  word,
+  glyph,
+  children,
+  childrenNeedRoom = false,
+  fullSizeHero = false,
+  ariaLabel,
+}: StatusZoneProps) {
+  const heroSize = childrenNeedRoom || (!fullSizeHero && heroUsesMinSize(text, tone)) ? "text-hero-min" : "text-hero";
   const loud = tone === 3 || tone === "sos";
   const hero = (
     <p
