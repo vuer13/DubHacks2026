@@ -27,7 +27,11 @@ from ..models import TrailSenseModel
 class MotionSignature(TypedDict):
     motion_spike: bool
     static_after: bool
-    peak_ratio: float
+    max_flow: float
+    end_flow: float
+    peak_vertical_flow: float
+    rotation_change_deg: float | None
+    opencv_fall_suspected: bool
 
 
 FallLabel = Literal["yes", "no", "unsure"]
@@ -54,15 +58,14 @@ class FallAssessment(TrailSenseModel):
 
 
 TARGET_FPS = 10.0
-FRAME_SIZE = (64, 36)
+FRAME_LONG_EDGE = 320
 BASELINE_SECONDS = 1.0
-SPIKE_RATIO = 4.0
-STATIC_RATIO = 0.5
-STATIC_SECONDS = 1.5
-
-# Pixel-difference means are on a 0..255 scale. This floor prevents tiny
-# encoding noise in an otherwise still clip from producing an infinite ratio.
-MIN_BASELINE_DIFF = 1.0
+END_SECONDS = 1.0
+HIGH_MOTION = 6.0
+LOW_MOTION = 1.5
+VERTICAL_SWEEP_LIMIT = 5.0
+ROTATION_LIMIT_DEG = 20.0
+MIN_ORB_MATCHES = 8
 FALL_PROMPT = (
     "This is a chest camera on a hiker, with sound. Did the wearer fall to the "
     "ground during this clip? A stumble with recovery is no. Consider both the "
@@ -73,17 +76,22 @@ LOGGER = logging.getLogger(__name__)
 
 
 def motion_signature(clip_path: str | Path) -> MotionSignature:
-    """Measure a motion spike and subsequent stillness in a video clip.
+    """Extract whole-clip optical-flow and camera-rotation features.
 
-    Frames are sampled at approximately 10 fps, resized to 64x36 grayscale,
-    and compared with the preceding sampled frame. A spike is a difference
-    greater than 4x the mean difference over the preceding second. Stillness
-    is a complete 1.5-second window after a spike whose differences are all
-    below half of that spike's pre-event baseline.
+    Frames are sampled at up to 10 fps and resized with their aspect ratio
+    preserved so the longest edge is 320 pixels. Farneback optical flow gives
+    an average pixel displacement per sampled frame. ``max_flow`` is the
+    largest displacement in the clip; ``end_flow`` averages the last second.
+    ORB matches estimate camera rotation from about one second before the
+    largest movement to the final frame.
+
+    The initial OpenCV rule requires high peak flow, low end flow, and a
+    measurable rotation above ``ROTATION_LIMIT_DEG``. These are starter
+    thresholds for inspection and tuning on labeled fall and non-fall clips.
 
     Raises:
         ValueError: If OpenCV cannot open the clip, its frame rate is unknown,
-            or it contains too few readable frames to calculate motion.
+            or it is too short to calculate motion across the baseline and end.
     """
     capture = cv2.VideoCapture(str(clip_path))
     if not capture.isOpened():
@@ -96,8 +104,7 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
         raise ValueError("Could not determine the fall clip frame rate")
 
     sample_fps = min(TARGET_FPS, source_fps)
-    frame_diffs: list[float] = []
-    previous_gray: np.ndarray | None = None
+    frames: list[np.ndarray] = []
     frame_index = 0
     next_sample_time = 0.0
     sample_interval = 1.0 / sample_fps
@@ -114,44 +121,114 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
                 continue
             next_sample_time += sample_interval
 
-            small = cv2.resize(frame, FRAME_SIZE, interpolation=cv2.INTER_AREA)
-            gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-            if previous_gray is not None:
-                difference = cv2.absdiff(gray, previous_gray)
-                frame_diffs.append(float(np.mean(difference)))
-            previous_gray = gray
+            height, width = frame.shape[:2]
+            scale = FRAME_LONG_EDGE / max(height, width)
+            resized_size = (
+                max(1, round(width * scale)),
+                max(1, round(height * scale)),
+            )
+            resized = cv2.resize(frame, resized_size, interpolation=cv2.INTER_AREA)
+            frames.append(cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY))
     finally:
         capture.release()
 
-    baseline_frames = ceil(BASELINE_SECONDS * sample_fps)
-    still_frames = ceil(STATIC_SECONDS * sample_fps)
-    if len(frame_diffs) <= baseline_frames:
+    if len(frames) < 2:
         raise ValueError("Fall clip is too short to measure motion")
 
-    spike_events: list[tuple[int, float]] = []
-    ratios: list[float] = []
-    for index in range(baseline_frames, len(frame_diffs)):
-        pre_spike_mean = float(np.mean(frame_diffs[index - baseline_frames : index]))
-        baseline = max(pre_spike_mean, MIN_BASELINE_DIFF)
-        ratio = frame_diffs[index] / baseline
-        ratios.append(ratio)
-        if ratio > SPIKE_RATIO:
-            spike_events.append((index, baseline))
+    flow_magnitudes: list[float] = []
+    vertical_flow_means: list[float] = []
+    for before, after in zip(frames, frames[1:]):
+        flow = cv2.calcOpticalFlowFarneback(
+            before,
+            after,
+            None,
+            pyr_scale=0.5,
+            levels=3,
+            winsize=15,
+            iterations=3,
+            poly_n=5,
+            poly_sigma=1.2,
+            flags=0,
+        )
+        magnitude, _ = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+        flow_magnitudes.append(float(np.mean(magnitude)))
+        vertical_flow_means.append(float(np.mean(flow[..., 1])))
 
-    static_after = False
-    for index, baseline in spike_events:
-        following = frame_diffs[index + 1 : index + 1 + still_frames]
-        if len(following) == still_frames and all(
-            difference < STATIC_RATIO * baseline for difference in following
-        ):
-            static_after = True
-            break
+    baseline_frames = ceil(BASELINE_SECONDS * sample_fps)
+    end_frames = max(1, ceil(END_SECONDS * sample_fps))
+    if len(flow_magnitudes) < baseline_frames + end_frames:
+        raise ValueError("Fall clip is too short to measure motion")
+
+    max_flow_index = int(np.argmax(flow_magnitudes))
+    max_flow = flow_magnitudes[max_flow_index]
+    end_flow = float(np.mean(flow_magnitudes[-end_frames:]))
+    peak_vertical_flow = vertical_flow_means[max_flow_index]
+    motion_spike = max_flow > HIGH_MOTION
+    static_after = end_flow < LOW_MOTION
+
+    before_spike_index = max(0, max_flow_index - baseline_frames)
+    rotation_change_deg = _estimate_rotation_degrees(
+        frames[before_spike_index], frames[-1]
+    )
+    strong_camera_change = (
+        abs(peak_vertical_flow) > VERTICAL_SWEEP_LIMIT
+        or (
+            rotation_change_deg is not None
+            and rotation_change_deg > ROTATION_LIMIT_DEG
+        )
+    )
+    opencv_fall_suspected = (
+        motion_spike
+        and static_after
+        # ORB can fail on blur or a featureless final view. In that case, keep
+        # high-flow plus post-event stillness as a weaker candidate signal.
+        and (strong_camera_change or rotation_change_deg is None)
+    )
 
     return {
-        "motion_spike": bool(spike_events),
+        "motion_spike": motion_spike,
         "static_after": static_after,
-        "peak_ratio": max(ratios, default=0.0),
+        "max_flow": max_flow,
+        "end_flow": end_flow,
+        "peak_vertical_flow": peak_vertical_flow,
+        "rotation_change_deg": rotation_change_deg,
+        "opencv_fall_suspected": opencv_fall_suspected,
     }
+
+
+def _estimate_rotation_degrees(before: np.ndarray, after: np.ndarray) -> float | None:
+    """Estimate absolute scene rotation using ORB matches and a robust affine fit."""
+    orb = cv2.ORB_create(nfeatures=800)
+    before_points, before_descriptors = orb.detectAndCompute(before, None)
+    after_points, after_descriptors = orb.detectAndCompute(after, None)
+    if before_descriptors is None or after_descriptors is None:
+        return None
+
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING)
+    pairs = matcher.knnMatch(before_descriptors, after_descriptors, k=2)
+    matches = [
+        first
+        for pair in pairs
+        if len(pair) == 2
+        for first, second in [pair]
+        if first.distance < 0.75 * second.distance
+    ]
+    if len(matches) < MIN_ORB_MATCHES:
+        return None
+
+    source = np.float32([before_points[match.queryIdx].pt for match in matches])
+    target = np.float32([after_points[match.trainIdx].pt for match in matches])
+    affine, inliers = cv2.estimateAffinePartial2D(
+        source,
+        target,
+        method=cv2.RANSAC,
+        ransacReprojThreshold=3.0,
+    )
+    if affine is None or inliers is None or int(np.sum(inliers)) < MIN_ORB_MATCHES:
+        return None
+
+    angle = math.degrees(math.atan2(float(affine[1, 0]), float(affine[0, 0])))
+    return abs(angle)
 
 
 def _request_fall_confirmation(clip_path: str | Path) -> FallConfirmation:
@@ -253,20 +330,30 @@ async def vlm_confirm(clip_path: str | Path) -> tuple[FallLabel, float]:
 
 
 async def assess(clip_path: str | Path) -> FallAssessment:
-    """Combine OpenCV motion clues with an Mk1.5 confirmation when warranted."""
-    signature = await asyncio.to_thread(motion_signature, clip_path)
-    motion_spike = signature["motion_spike"]
-    static_after = signature["static_after"]
-
-    if not motion_spike and not static_after:
-        return FallAssessment(
-            fell="no",
-            confidence=0.0,
-            signals=FallSignals(
-                motion_spike=False,
-                static_after=False,
-                vlm=None,
+    """Run OpenCV feature extraction and ask Mk1.5 to classify every clip."""
+    try:
+        signature = await asyncio.to_thread(motion_signature, clip_path)
+    except (ValueError, cv2.error) as exc:
+        # OpenCV is supplemental: a decode or feature error must not veto Mk1.5.
+        LOGGER.warning("OpenCV fall features unavailable: %s", exc)
+        motion_spike = False
+        static_after = False
+    else:
+        motion_spike = signature["motion_spike"]
+        static_after = signature["static_after"]
+        LOGGER.info(
+            "OpenCV fall features: max_flow=%.3f end_flow=%.3f "
+            "peak_vertical_flow=%.3f rotation_change_deg=%s "
+            "opencv_fall_suspected=%s",
+            signature["max_flow"],
+            signature["end_flow"],
+            signature["peak_vertical_flow"],
+            (
+                f"{signature['rotation_change_deg']:.1f}"
+                if signature["rotation_change_deg"] is not None
+                else "unavailable"
             ),
+            signature["opencv_fall_suspected"],
         )
 
     try:
@@ -276,12 +363,9 @@ async def assess(clip_path: str | Path) -> FallAssessment:
         vlm_result = "unsure"
         confidence = 0.0
 
-    supporting_signals = sum(
-        (motion_spike, static_after, vlm_result == "yes")
-    )
-    if supporting_signals >= 2:
+    if vlm_result == "yes":
         fell: FallLabel = "yes"
-    elif vlm_result == "unsure" and (motion_spike or static_after):
+    elif vlm_result == "unsure":
         fell = "unsure"
     else:
         fell = "no"
