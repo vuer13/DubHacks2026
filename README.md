@@ -10,9 +10,7 @@ Next.js implementation is kept under `frontend/legacy-web/` for reference.
 ## Prerequisites
 
 - Python 3.11
-- Node.js 22.13 or newer, and npm
-- On your phone: Expo Go from the App Store or Google Play (for UI work)
-- For the voice agent: Xcode (iPhone) or Android Studio, or an Expo account for cloud builds; see `frontend/docs/dev-build.md`
+- Node.js 22.13+ and npm
 - FFmpeg for the planned video clip processing. The current scaffold does not use it yet.
 
 On macOS with Homebrew, install the system tools with:
