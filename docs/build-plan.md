@@ -8,10 +8,11 @@ Working name: **TrailSense**. Rename freely.
 
 | Date | Change | Why |
 |---|---|---|
+| 2026-10-18 | Expo is now the active frontend in `frontend/`; the prior Next.js app is preserved in `frontend/legacy-web/`. Live camera capture posts repeated 3 s clips to `/api/clip`, where Perceptron sees a rolling 6 s frame window. | Use Expo Go for native camera iteration and keep the agreed clip API. |
 | 2026-10-17 | Voice moves from xAI Grok Voice to ElevenLabs: text to speech for warnings, ElevenLabs Agent with client tools for questions. | Team decision. Warnings no longer pass through a language model, so they are faster and spoken verbatim. Replay demo uses pre-rendered mp3s and needs no voice network call. |
 | 2026-10-17 | Perception moves from Mk1 on OpenRouter to Mk1.5 on the Perceptron API. | Mk1.5 is the model Perceptron recommends as the starting point. It adds strict JSON schema output, regex output, pointing, clip events, video tracking, audio in video, and `reasoning_effort`. Hosted Isaac was retired on 2026-09-25. |
 | 2026-10-17 | Video input follows Perceptron's guidance. Continuous monitoring (live and the replay pipeline) sends a running window of the last 6 s of frames every 3 s. Batch jobs over the whole hike send frames or a contact sheet. `ClipEvent.t_start` and `t_end` now mean the window bounds. | Perceptron advised: "if you're trying to do continuous monitoring, I'd pass in a running context window of a few seconds. If batching, I'd pass in frames or a contact sheet." Overlapping windows let the model see motion toward a hazard. No schema shape change. |
-| 2026-10-18 | Frontend moves from Next.js to React Native with Expo and Expo Router: one codebase for the hiker app on iOS and Android and the web share page; ElevenLabs voice agent runs in an Expo development build. The ElevenLabs token and text to speech routes move from Next.js server routes to the backend as `GET /api/voice/token` and `POST /api/voice/tts` (proposed, App/Voice owns `backend/voice/`). | Native camera, sensors, haptics, keep-awake and background-safe audio, plus a real installed app for blind users. The app cannot hold the ElevenLabs key, so the two voice routes need a server; the backend already holds the other keys. Migration runs in six phases; until Phase 6 lands the Expo app lives in `frontend-native/` and `frontend/` is still the old Next.js app. |
+| 2026-10-18 | Frontend moves from Next.js to React Native with Expo and Expo Router: one codebase for the hiker app on iOS and Android and the web share page; ElevenLabs voice agent runs in an Expo development build. The ElevenLabs token and text to speech routes move from Next.js server routes to the backend as `GET /api/voice/token` and `POST /api/voice/tts` (proposed, App/Voice owns `backend/voice/`). | Native camera, sensors, haptics, keep-awake and background-safe audio, plus a real installed app for blind users. The app cannot hold the ElevenLabs key, so the two voice routes need a server; the backend already holds the other keys. Migration was brought into `frontend/`; previous Next.js files are kept in `frontend/legacy-web/`. |
 | 2026-10-17 | New: trail sign reading (OCR) as a voice tool and an automatic readout at forks. Two optional schema fields (`Hazard.point`, `ClipEvent.sign`) and one endpoint (`POST /api/read_sign`). | Perceptron's smart glasses demo uses OCR and web search to add context to what the wearer sees. Signs are the trail equivalent. Additive and nullable, so nothing built so far breaks. Needs all three people to agree before code lands. |
 
 ## Tech stack
@@ -68,7 +69,7 @@ trailsense/
     requirements.txt
     voice/                          <- App/Voice: /api/voice/token and /api/voice/tts (proposed)
   frontend/                         <- App and voice: React Native, Expo SDK 57, Expo Router
-    app/
+    src/app/
       index.tsx                     <- hiker screen (iOS, Android)
       share/[session_id].tsx        <- emergency contact page (web build, also in the app)
       dev/states.tsx                <- dev-only gallery of every screen state

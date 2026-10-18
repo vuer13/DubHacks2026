@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import tempfile
 from math import ceil
 from pathlib import Path
 from time import perf_counter
@@ -70,10 +71,17 @@ MIN_ORB_MATCHES = 8
 OPENCV_FALL_CONFIDENCE = 0.5
 # Treat model answers below 50% confidence as inconclusive and check motion too.
 VLM_CONFIDENCE_THRESHOLD = 0.50
+FALL_WINDOW_SEGMENTS = 4
+FALL_CHECK_STRIDE_SEGMENTS = 3
 FALL_PROMPT = (
-    "This is a chest camera on a hiker, with sound. Did the wearer fall to the "
-    "ground during this clip? A stumble with recovery is no. Consider both the "
-    "picture and any impact or vocal sounds. Return only the requested JSON."
+    "This is footage from a chest-mounted camera worn by a hiker on a trail. Did "
+    "the hiker wearing the camera fall to the ground during this event? A stumble "
+    "with recovery, ordinary trail movement, a camera pan, crouching, or "
+    "intentional sitting is not a fall. Look for a sudden downward or rotational "
+    "camera movement, an impact, and a low or still final view. Consider any "
+    "impact or distress sounds too. A camera pan or shake alone is not enough. "
+    "If no fall can be determined, answer unsure. "
+    "Return only the requested JSON."
 )
 MODEL_LOG_PATH = Path(__file__).resolve().parents[1] / "data" / "logs" / "fall_model.jsonl"
 LOGGER = logging.getLogger(__name__)
@@ -200,6 +208,97 @@ def motion_signature(clip_path: str | Path) -> MotionSignature:
     }
 
 
+def assemble_fall_window(segments: list[tuple[bytes, str]]) -> Path:
+    """Join four consecutive one-second segments into a video-only window.
+
+    The mobile app sends one-second segments. The returned temporary MP4 is
+    assembled from the most recent four segments. Fall analysis advances by
+    three segments each time, keeping one second of overlap. OpenCV uses the
+    composite for motion analysis; Perceptron receives the original segments
+    separately with audio. The caller owns and must delete the returned path.
+    """
+    if len(segments) != FALL_WINDOW_SEGMENTS:
+        raise ValueError(
+            f"A rolling fall window requires exactly {FALL_WINDOW_SEGMENTS} segments"
+        )
+
+    part_paths: list[Path] = []
+    output_path: Path | None = None
+    writer: cv2.VideoWriter | None = None
+    output_fps: float | None = None
+    output_size: tuple[int, int] | None = None
+    written_frames = 0
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as output_file:
+            output_path = Path(output_file.name)
+
+        for segment_bytes, filename in segments:
+            suffix = Path(filename).suffix.lower()
+            if suffix not in {".mp4", ".mov", ".m4v", ".webm"}:
+                suffix = ".mp4"
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as part_file:
+                part_path = Path(part_file.name)
+                part_file.write(segment_bytes)
+            part_paths.append(part_path)
+
+            capture = cv2.VideoCapture(str(part_path))
+            if not capture.isOpened():
+                capture.release()
+                raise ValueError("Could not read a recorded fall-window segment")
+
+            source_fps = float(capture.get(cv2.CAP_PROP_FPS))
+            width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            if not math.isfinite(source_fps) or source_fps <= 0 or width <= 0 or height <= 0:
+                capture.release()
+                raise ValueError("Could not read video properties for a fall-window segment")
+
+            if output_fps is None:
+                output_fps = min(source_fps, 15.0)
+                output_size = (width, height)
+                fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+                writer = cv2.VideoWriter(
+                    str(output_path), fourcc, output_fps, output_size
+                )
+                if not writer.isOpened():
+                    capture.release()
+                    raise ValueError("Could not create the rolling fall-window video")
+
+            assert output_fps is not None and output_size is not None and writer is not None
+            sample_every = max(1, round(source_fps / output_fps))
+            frame_index = 0
+            try:
+                while True:
+                    ok, frame = capture.read()
+                    if not ok:
+                        break
+                    if frame_index % sample_every == 0:
+                        if (frame.shape[1], frame.shape[0]) != output_size:
+                            frame = cv2.resize(frame, output_size, interpolation=cv2.INTER_AREA)
+                        writer.write(frame)
+                        written_frames += 1
+                    frame_index += 1
+            finally:
+                capture.release()
+
+        if writer is not None:
+            writer.release()
+            writer = None
+        if output_path is None or written_frames < 6 or output_path.stat().st_size == 0:
+            raise ValueError("The rolling fall window did not contain enough video frames")
+        return output_path
+    except Exception:
+        if writer is not None:
+            writer.release()
+        if output_path is not None:
+            output_path.unlink(missing_ok=True)
+        raise
+    finally:
+        for part_path in part_paths:
+            part_path.unlink(missing_ok=True)
+
+
 def _estimate_rotation_degrees(before: np.ndarray, after: np.ndarray) -> float | None:
     """Estimate absolute scene rotation using ORB matches and a robust affine fit."""
     orb = cv2.ORB_create(nfeatures=800)
@@ -235,16 +334,33 @@ def _estimate_rotation_degrees(before: np.ndarray, after: np.ndarray) -> float |
     return abs(angle)
 
 
-def _request_fall_confirmation(clip_path: str | Path) -> FallConfirmation:
+def _request_fall_confirmation(
+    clip_path: str | Path,
+    audio_available: bool = True,
+    video_segments: list[bytes] | None = None,
+) -> FallConfirmation:
     """Make one synchronous Mk1.5 request; called in a worker thread."""
     from perceptron import video
 
     from ..perception.mk1 import get_client, get_model_name
 
-    response = get_client().chat.completions.create(
-        model=get_model_name(),
-        messages=[{"role": "user", "content": [video(str(clip_path)), FALL_PROMPT]}],
-        response_format={
+    prompt = FALL_PROMPT
+    if video_segments is not None:
+        media = [video(segment) for segment in video_segments]
+        prompt += (
+            " The request contains four consecutive one-second video segments "
+            "in oldest-to-newest order, covering a four-second event; assess them "
+            "as one continuous event."
+        )
+    else:
+        media = [video(str(clip_path))]
+    if not audio_available:
+        prompt += " Audio is unavailable; judge only the visual evidence."
+
+    request: dict[str, object] = {
+        "model": get_model_name(),
+        "messages": [{"role": "user", "content": [*media, prompt]}],
+        "response_format": {
             "type": "json_schema",
             "json_schema": {
                 "name": "fall_confirmation",
@@ -252,9 +368,12 @@ def _request_fall_confirmation(clip_path: str | Path) -> FallConfirmation:
                 "schema": FallConfirmation.model_json_schema(),
             },
         },
-        reasoning_effort="high",
-        vision_config={"enable_audio_in_video": True},
-    )
+        "reasoning_effort": "medium",
+    }
+    if audio_available:
+        request["vision_config"] = {"enable_audio_in_video": True}
+
+    response = get_client().chat.completions.create(**request)
 
     if response.choices[0].finish_reason != "stop":
         raise ValueError(
@@ -275,6 +394,7 @@ def _log_model_call(
     status: Literal["ok", "error"],
     fell: FallLabel | None = None,
     confidence: float | None = None,
+    reason: str | None = None,
     error_type: str | None = None,
 ) -> None:
     """Append metadata for each model call without storing footage or secrets."""
@@ -290,6 +410,8 @@ def _log_model_call(
         entry["fell"] = fell
     if confidence is not None:
         entry["confidence"] = confidence
+    if reason is not None:
+        entry["reason"] = reason
     if error_type is not None:
         entry["error_type"] = error_type
 
@@ -301,7 +423,12 @@ def _log_model_call(
         LOGGER.exception("Could not write Perceptron fall-call log")
 
 
-async def vlm_confirm(clip_path: str | Path) -> tuple[FallLabel, float]:
+async def vlm_confirm(
+    clip_path: str | Path,
+    *,
+    audio_available: bool = True,
+    video_segments: list[bytes] | None = None,
+) -> tuple[FallLabel, float]:
     """Ask Mk1.5 whether a hiker fell, using video and its audio track.
 
     The blocking SDK request runs in a worker thread so this coroutine does not
@@ -313,38 +440,80 @@ async def vlm_confirm(clip_path: str | Path) -> tuple[FallLabel, float]:
 
     started = perf_counter()
     try:
-        confirmation = await asyncio.to_thread(_request_fall_confirmation, path)
+        confirmation = await asyncio.to_thread(
+            _request_fall_confirmation, path, audio_available, video_segments
+        )
     except Exception as exc:
+        latency_ms = round((perf_counter() - started) * 1000)
         _log_model_call(
             clip_path=path,
-            latency_ms=round((perf_counter() - started) * 1000),
+            latency_ms=latency_ms,
             status="error",
             error_type=type(exc).__name__,
         )
+        print(
+            f"Perceptron fall check failed: error={type(exc).__name__} "
+            f"latency_ms={latency_ms}",
+            flush=True,
+        )
+        LOGGER.warning(
+            "Perceptron fall check failed: error=%s message=%s latency_ms=%d",
+            type(exc).__name__,
+            exc,
+            latency_ms,
+        )
         raise
 
+    latency_ms = round((perf_counter() - started) * 1000)
     _log_model_call(
         clip_path=path,
-        latency_ms=round((perf_counter() - started) * 1000),
+        latency_ms=latency_ms,
         status="ok",
         fell=confirmation.fell,
         confidence=confirmation.confidence,
+        reason=confirmation.reason,
+    )
+    print(
+        f"Perceptron fall result: fell={confirmation.fell} "
+        f"confidence={confirmation.confidence:.3f} reason={confirmation.reason} "
+        f"latency_ms={latency_ms}",
+        flush=True,
     )
     return confirmation.fell, confirmation.confidence
 
 
-async def assess(clip_path: str | Path) -> FallAssessment:
+async def assess(
+    clip_path: str | Path,
+    *,
+    audio_available: bool = True,
+    video_segments: list[bytes] | None = None,
+) -> FallAssessment:
     """Use Mk1.5 first and consult OpenCV when its answer is inconclusive."""
     try:
-        vlm_result, confidence = await vlm_confirm(clip_path)
+        if audio_available and video_segments is None:
+            vlm_result, confidence = await vlm_confirm(clip_path)
+        elif video_segments is not None:
+            vlm_result, confidence = await vlm_confirm(
+                clip_path, video_segments=video_segments
+            )
+        else:
+            vlm_result, confidence = await vlm_confirm(
+                clip_path, audio_available=False
+            )
     except Exception:
         vlm_result = "unsure"
         confidence = 0.0
+        print("Perceptron fall result unavailable; checking OpenCV fallback", flush=True)
 
     if (
         vlm_result != "unsure"
         and confidence >= VLM_CONFIDENCE_THRESHOLD
     ):
+        print(
+            f"Fall decision: source=perceptron fell={vlm_result} "
+            f"confidence={confidence:.3f}",
+            flush=True,
+        )
         return FallAssessment(
             fell=vlm_result,
             confidence=confidence,
@@ -369,30 +538,34 @@ async def assess(clip_path: str | Path) -> FallAssessment:
             ),
         )
 
-    LOGGER.info(
-        "OpenCV fall fallback: max_flow=%.3f end_flow=%.3f "
-        "peak_vertical_flow=%.3f rotation_change_deg=%s "
-        "opencv_fall_suspected=%s",
-        signature["max_flow"],
-        signature["end_flow"],
-        signature["peak_vertical_flow"],
-        (
-            f"{signature['rotation_change_deg']:.1f}"
-            if signature["rotation_change_deg"] is not None
-            else "unavailable"
-        ),
-        signature["opencv_fall_suspected"],
+    print(
+        "OpenCV fall fallback: "
+        f"max_flow={signature['max_flow']:.3f} "
+        f"end_flow={signature['end_flow']:.3f} "
+        f"peak_vertical_flow={signature['peak_vertical_flow']:.3f} "
+        "rotation_change_deg="
+        f"{signature['rotation_change_deg'] if signature['rotation_change_deg'] is not None else 'unavailable'} "
+        f"opencv_fall_suspected={signature['opencv_fall_suspected']}",
+        flush=True,
+    )
+
+    fallback_fell: FallLabel = (
+        "yes" if signature["opencv_fall_suspected"] else "unsure"
+    )
+    fallback_confidence = (
+        OPENCV_FALL_CONFIDENCE if signature["opencv_fall_suspected"] else 0.0
+    )
+    print(
+        f"Fall decision: source=opencv_fallback fell={fallback_fell} "
+        f"confidence={fallback_confidence:.3f} perceptron={vlm_result}",
+        flush=True,
     )
 
     return FallAssessment(
         # OpenCV can add positive fall evidence, but a negative heuristic is
         # not enough to rule out a fall in a partial sliding window.
-        fell="yes" if signature["opencv_fall_suspected"] else "unsure",
-        confidence=(
-            OPENCV_FALL_CONFIDENCE
-            if signature["opencv_fall_suspected"]
-            else 0.0
-        ),
+        fell=fallback_fell,
+        confidence=fallback_confidence,
         signals=FallSignals(
             motion_spike=signature["motion_spike"],
             static_after=signature["static_after"],

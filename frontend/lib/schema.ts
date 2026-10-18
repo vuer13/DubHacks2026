@@ -93,6 +93,20 @@ export const SpeakEventSchema = z
   })
   .strict();
 
+export const ClipResponseSchema = z
+  .object({
+    event: ClipEventSchema,
+    speak: z.array(SpeakEventSchema),
+  })
+  .strict();
+
+export const FallCheckResponseSchema = z
+  .object({
+    fell: z.enum(["yes", "no", "unsure"]),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+
 // Safety events, docs/shared-context.md "Safety events".
 export const FallSuspectedEventSchema = z
   .object({
@@ -170,5 +184,7 @@ export const JobResponseSchema = z
 export type Hazard = z.infer<typeof HazardSchema>;
 export type SignReading = z.infer<typeof SignReadingSchema>;
 export type ClipEvent = z.infer<typeof ClipEventSchema>;
+export type ClipResponse = z.infer<typeof ClipResponseSchema>;
+export type FallCheckResponse = z.infer<typeof FallCheckResponseSchema>;
 export type SpeakEvent = z.infer<typeof SpeakEventSchema>;
 export type SafetyEvent = z.infer<typeof SafetyEventSchema>;

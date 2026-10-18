@@ -4,7 +4,7 @@ You own `frontend/`: the TrailSense app in React Native (Expo SDK 57, Expo Route
 
 Before you start: read [`shared-context.md`](./shared-context.md) and the ElevenLabs half of [`vendor-apis.md`](./vendor-apis.md).
 
-**Migration status.** The frontend is moving from Next.js to Expo in six phases (see the 2026-10-18 row in [`build-plan.md`](./build-plan.md)). Until Phase 6 lands, the Expo app lives in `frontend-native/` and `frontend/` is still the old Next.js app; read every `frontend/` path below as `frontend-native/` until then. The migration already builds the design system, the hiker screen and every screen state (including the fall check-in, SOS and low-vision screens), the state gallery at `/dev/states`, the share page, and typed wrappers for the device features. The B steps below wire those pieces to real data.
+**Migration status.** Expo Router is active in `frontend/`; the previous Next.js files are preserved under `frontend/legacy-web/`. Fall-only test mode is on by default and records one-second video segments. `/api/fall/check` combines the latest four segments into a sliding four-second window: segments `[1,2,3,4]`, then `[4,5,6,7]`. It assesses after the first four clips and then every three clips, retaining one second of overlap. The first result needs four seconds of footage plus model latency. If analysis falls behind, the app keeps at most four queued clips and drops older ones, so sequence gaps reset the window and it refills from recent footage. Turn fall-only mode off to also send clips to `/api/clip` for trail analysis. One `yes` result pauses monitoring and opens a 20-second “Are you okay?” screen; tapping “I’m okay” dismisses it. This development check-in currently does not place an SOS call, and voice-response cancellation, location sharing, and automatic SOS still need their B5 wiring. Perceptron receives the four original segments, including their audio. One nine-second request previously took 37,302 ms at high reasoning effort; fall confirmation now uses medium, but live latency still needs measuring.
 
 ## How you run it
 
@@ -53,7 +53,7 @@ The app skeleton is built by the migration. Do the dashboard part by hand (10 mi
 5. Put `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, `ELEVENLABS_VOICE_ID` and `ELEVENLABS_TTS_MODEL=eleven_flash_v2_5` in the repository-root `.env` the backend reads. Never in `frontend/.env`: that file is bundled into the app.
 6. Install the TrailSense development build on your phone ([`frontend/docs/dev-build.md`](../frontend/docs/dev-build.md)).
 
-**Done when**: the app opens in Expo Go with a green health dot, the development build opens on your phone, and the agent exists in the dashboard with six tools.
+**Done when**: the app opens in Expo Go, the development build opens on your phone, and the agent exists in the dashboard with six tools.
 
 ---
 
@@ -141,6 +141,11 @@ Follow [`integration-and-demo.md`](./integration-and-demo.md). Your job is the f
 
 ## Step B5: live camera mode and fall check-in
 
+The repeated camera clip upload and live hazard analysis described in item 1 are
+implemented in `frontend/src/app/index.tsx` and `backend/perception/live.py`.
+The remaining steps below cover fall candidate detection and the check-in/SOS
+flow.
+
 The check-in, cancelled and SOS screens and their reducer actions already exist; `safetyEventToAction` maps the shared-context safety events onto them. This step decides when to start a check-in and talks to the backend.
 
 **Prompt B5**
@@ -148,16 +153,16 @@ The check-in, cancelled and SOS screens and their reducer actions already exist;
 ```
 Read docs/shared-context.md. Add live mode and the fall check-in.
 
-1. The "Live" pill already shows the expo-camera preview. When live is on, use useClipRecorder to record back-to-back 3 second clips and POST each to /api/clip with the session_id. Check which container each platform records (mp4 or mov) and confirm the backend's ffmpeg accepts it; tell the Perception lane if not. The backend stitches clips into a running window, so keep clips back to back with no deliberate gaps. Dispatch the returned event and speak list into the same path as replay. Show the analysing pulse while a request is in flight and skip a cycle if the previous one has not returned, so requests never pile up; a skipped clip just leaves a short gap in the window.
-2. Fall trigger with lib/native/motion.ts: flag a fall candidate when the accelerometer magnitude spikes above a threshold (start around 2.5 g) and the next 2 seconds stay nearly still (low variance on accelerometer and gyroscope). Make the thresholds constants. While a candidate is open, also POST each 3 second clip to /api/fall/check as a real clip (fall confirmation listens to the audio), and keep submitting each next consecutive clip window until the candidate ends or the check-in starts, so the backend can assess consecutive windows.
+1. The live Expo camera records one-second video segments and POSTs each to /api/clip with the session_id and sequence number. The backend stitches frames into its running trail window using capture order, even if analysis finishes later. Keep every segment in order; the analysis queue may lag behind the camera when model calls are slow.
+2. Fall trigger with lib/native/motion.ts: flag a fall candidate when the accelerometer magnitude spikes above a threshold (start around 2.5 g) and the next 2 seconds stay nearly still (low variance on accelerometer and gyroscope). Make the thresholds constants. POST each one-second segment to /api/fall/check with an increasing sequence number. The backend keeps the most recent four segments and assesses a sliding four-second window: [1,2,3,4], then [4,5,6,7], so each check advances three seconds and overlaps by one. Perceptron gets the original segments with audio; OpenCV uses a temporary video assembled from their frames. Keep no more than four pending clips on the client; drop older queued clips if inference falls behind.
 3. frontend/lib/safety/checkin.ts, owned by the app, not by the agent:
-   - Count consecutive /api/fall/check responses where fell is "yes". Start the check-in only after two consecutive yes results; reset the count on "no" or "unsure". A single yes or an unsure result must not start the check-in. After the second yes, dispatch checkin_started, play the sos earcon and a long haptic, and Speech.say("Are you okay? Say anything to cancel.", {priority: 3}); repeat the earcon every 5 seconds. If the agent is connected, also send "[SYSTEM] Possible fall detected. Ask the hiker once if they are okay, then wait."
+   - Start the check-in on the first fully assessed /api/fall/check response where fell is "yes". The first three one-second segments only fill the initial window and return unsure; those warm-up responses must not start it. Dispatch checkin_started, play the sos earcon and a long haptic, and Speech.say("Are you okay? Say anything to cancel.", {priority: 3}); repeat the earcon every 5 seconds. If the agent is connected, also send "[SYSTEM] Possible fall detected. Ask the hiker once if they are okay, then wait."
    - Cancel on any of: a final user transcript from voice.ts, a tap anywhere on the overlay (already wired), or the agent calling cancel_sos. On cancel: POST /api/sos/cancel, Speech.say("Cancelled. Help is not being called."), and tell the agent "Fall check-in cancelled by the hiker."
    - When the countdown reaches zero the reducer moves to sos_sent. Then POST /api/sos with the latest location and recent say strings, Speech.say("Calling for help now."), and tell the agent "SOS call placed to the emergency contact." Cancel SOS on the banner calls POST /api/sos/cancel.
    - The dev-only "Test check-in" button already starts a check-in so you can rehearse without dropping a phone.
 4. Keep live mode and replay mode mutually exclusive.
 
-Test by walking around the room with the phone, then simulating a fall by dropping the phone onto a cushion. Verify one positive window does not start the check-in and two consecutive positive windows do. Commit "live mode and fall check-in".
+Test by walking around the room with the phone, then simulating a fall by dropping the phone onto a cushion. Verify the rolling windows advance one segment at a time and a positive result starts the check-in. Commit "live mode and fall check-in".
 ```
 
 **Done when**: live mode produces warnings while walking, a cushion drop triggers the check-in, and speaking cancels it.

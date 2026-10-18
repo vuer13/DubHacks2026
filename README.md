@@ -4,7 +4,8 @@ A hiking assistant for visually impaired hikers: phone camera in, Perceptron Mk1
 
 The app is React Native with Expo (SDK 57) and Expo Router: one codebase for the hiker app on iPhone and Android and the web share page for the emergency contact.
 
-> **Migration in progress.** The frontend is moving from Next.js to Expo in six phases. Until Phase 6 lands, the Expo app is in `frontend-native/` and `frontend/` is still the old Next.js app. Run the commands below in `frontend-native/` until then.
+The active app is React Native with Expo Router in `frontend/`. The previous
+Next.js implementation is kept under `frontend/legacy-web/` for reference.
 
 ## Prerequisites
 
@@ -37,15 +38,37 @@ App, in another terminal:
     cd frontend
     npm install
     cp .env.example .env
-    npx expo start
 
-Scan the QR code with Expo Go on your phone. Keep the phone and computer on the
-same Wi-Fi network. Set `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env` to
-`http://<computer-wifi-ip>:8000` so the phone can reach FastAPI. On the computer,
-the backend health check is at http://localhost:8000/health.
-Keep Perceptron and Twilio secrets in the repository-root `.env`; do not put
-secrets in the Expo app's public environment variables. The current voice client
-and fall check-in UI are still being integrated.
+Set `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env` to your Mac's LAN IP
+(`http://192.168.x.x:8000`, find it with `ipconfig getifaddr en0`); on a phone,
+`localhost` means the phone. Put no keys in `frontend/.env`: every
+`EXPO_PUBLIC_` value is bundled into the app.
+
+Run it one of three ways:
+
+- **Expo Go** (UI work, no build): `npx expo start --go`, then scan the QR code
+  with the phone's camera (iPhone) or from Expo Go (Android). Phone and Mac on
+  the same Wi-Fi.
+- **Development build** (everything, including the voice agent): install the
+  TrailSense development build once (`frontend/docs/dev-build.md`), then
+  `npx expo start --dev-client` and open the TrailSense app.
+- **Web share page**: `npx expo start --web`, then open
+  `http://localhost:8081/share/demo`.
+
+The app records repeated 1-second camera clips while monitoring is active. In
+trail mode, clips go to `POST /api/clip` for hazard analysis. Fall checks combine
+four clips into a rolling four-second window, then advance by three clips to
+retain one second of overlap. The first result needs four seconds of footage.
+Camera recordings restart between clips, so short gaps are possible. Analysis is
+processed in capture order, with at most four waiting clips; older queued clips
+are dropped when model latency falls behind. One nine-second fall request took
+37,302 ms at high reasoning effort. Fall confirmation now uses medium effort,
+but latency still needs measuring. Keep the app open in the foreground during
+live monitoring. On a physical phone, the backend URL must use the Mac's Wi-Fi IP.
+
+The backend health check is at http://localhost:8000/health.
+API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio
+integrations, and they all live in the repository-root `.env`.
 
 ## Code ownership
 
