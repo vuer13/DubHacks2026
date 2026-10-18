@@ -2,8 +2,142 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * TrailSense design tokens.
+ * Copied verbatim from docs/design/handoff.md, section 1. That file is the
+ * source of truth: change a token there first, then here.
+ * `npm run check:tokens` fails if a handoff token is missing or differs.
+ */
 :root {
-  color-scheme: light;
+  /* Ground and text, hiker screen (dark only) */
+  --ts-bg: #0B1410;            /* page background, near-black green */
+  --ts-surface: #13201A;       /* rows, cards, video zone */
+  --ts-surface-2: #1B2C23;     /* raised controls, ring track */
+  --ts-divider: #2A3F33;       /* hairlines and card edges, never carries text */
+  --ts-text: #F2F5F0;          /* primary text, focus ring; 17.0:1 on --ts-bg */
+  --ts-text-muted: #AEBBB2;    /* timestamps, scene sentences; 9.4:1 on --ts-bg, 7.4:1 on --ts-surface-2 */
+
+  /* Accent (one hue, two uses) */
+  --ts-accent: #1B5A38;        /* primary action fill, trail clear fill; --ts-text on it 7.4:1 */
+  --ts-accent-bright: #5FC98A; /* same green as text, icon, outline on dark; 9.1:1 on --ts-bg */
+
+  /* Severity scale, distinguishable by luminance alone (59%, 43%, 6%) */
+  --ts-sev-1-bg: #9ED8AE;      /* note, calm green */
+  --ts-sev-1-fg: #0B1410;      /* 11.5:1 */
+  --ts-sev-2-bg: #E0A526;      /* caution, amber */
+  --ts-sev-2-fg: #0B1410;      /* 8.5:1 */
+  --ts-sev-3-bg: #8F0F19;      /* stop, red */
+  --ts-sev-3-fg: #FFFFFF;      /* 9.3:1, pure white only here */
+
+  /* Event and emergency */
+  --ts-fork-bg: #8DC4F5;       /* junction events, sign readouts */
+  --ts-fork-fg: #0B1410;       /* 10.1:1 */
+  --ts-sos-bg: #FFD60A;        /* SOS yellow */
+  --ts-sos-fg: #000000;        /* 14.9:1 either way round; low-vision mode is yellow on black */
+
+  /* Health indicators (non-text, each over 6:1 on --ts-bg, always beside a word) */
+  --ts-health-ok: #4CC37A;
+  --ts-health-fail: #FF5C5C;
+  --ts-health-off: #8A958D;
+
+  /* Live share page (light) */
+  --ts-light-bg: #F4F6F2;
+  --ts-light-surface: #FFFFFF;
+  --ts-light-text: #0B1410;    /* 17.2:1 on --ts-light-bg */
+  --ts-light-muted: #44534A;   /* 7.5:1 on --ts-light-bg, 8.1:1 on white */
+  --ts-light-divider: #D5DDD6;
+  --ts-map-ground: #E6EAE4;    /* placeholder until Leaflet tiles load */
+
+  /* Type, system stack, no web fonts */
+  --ts-font: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+  --ts-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ts-type-hero: 56px;        /* last spoken line; 40px minimum when the line reaches 6 words; line-height 1.05; weight 700; max-width 12ch */
+  --ts-type-hero-min: 40px;
+  --ts-type-lv: 64px;          /* low-vision mode text; line-height 1.05; weight 700 */
+  --ts-type-heading: 32px;     /* line-height 38px; weight 700 */
+  --ts-type-label: 24px;       /* line-height 30px; weight 600 */
+  --ts-type-secondary: 20px;   /* line-height 28px; weight 400; floor for labels */
+  --ts-type-meta: 18px;        /* line-height 24px; weight 500; tabular numerals; absolute floor on the hiker screen */
+
+  /* Spacing, 4px base */
+  --ts-space-1: 4px;
+  --ts-space-2: 8px;
+  --ts-space-3: 12px;
+  --ts-space-4: 16px;          /* screen gutter */
+  --ts-space-6: 24px;
+  --ts-space-8: 32px;
+  --ts-space-12: 48px;
+  --ts-space-16: 64px;
+
+  /* Sizes */
+  --ts-touch-min: 64px;
+  --ts-touch-mic: 112px;       /* never under 96px */
+  --ts-gutter: 16px;
+  --ts-radius-control: 16px;
+  --ts-radius-pill: 999px;
+  --ts-focus: 3px solid var(--ts-text); /* outline-offset 3px; inside the yellow check-in it is inset 6px */
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: var(--ts-bg);
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--ts-bg);
+  color: var(--ts-text);
+  font-family: var(--ts-font);
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Focus ring from the handoff: 3px off-white outline, 3px offset. */
+:focus-visible {
+  outline: var(--ts-focus);
+  outline-offset: 3px;
+}
+
+/* Mic listening pulse: one outer ring, scale 1 to 1.28, fading over 1.4 s. */
+@keyframes ts-pulse {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.28);
+    opacity: 0;
+  }
+}
+
+.ts-pulse {
+  animation: ts-pulse 1.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The handoff keeps the pulse ring visible but static at 50% opacity. */
+  .ts-pulse {
+    opacity: 0.5;
+  }
+}
+
+/*
+ * Legacy share page styles from the scaffold. Step C5 rebuilds the share page
+ * with the light tokens (--ts-light-*); delete this block then.
+ */
+body:has(.share-shell) {
   --ink: #15251e;
   --muted: #65736c;
   --surface: #ffffff;
@@ -11,98 +145,10 @@
   --line: #dce4dc;
   --green: #1d6448;
   --green-dark: #174c38;
-  --green-soft: #e6f1e9;
-  --amber: #f1c65a;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html {
-  min-height: 100%;
+  color-scheme: light;
   background: var(--page);
-}
-
-body {
-  min-height: 100vh;
-  margin: 0;
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
-}
-
-a {
-  color: inherit;
-}
-
-.page-shell {
-  width: min(1180px, calc(100% - 48px));
-  margin: 0 auto;
-  padding: 24px 0 28px;
-}
-
-.topbar,
-.brand,
-.connection-status,
-.panel-heading,
-.video-footer,
-.event-list-heading,
-.page-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.topbar {
-  min-height: 48px;
-}
-
-.brand {
-  justify-content: flex-start;
-  gap: 10px;
-  color: var(--green-dark);
-  font-size: 18px;
-  font-weight: 750;
-  text-decoration: none;
-}
-
-.brand-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--green);
-  color: white;
-  font-size: 17px;
-}
-
-.connection-status {
-  justify-content: flex-start;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.status-dot,
-.share-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #a0aaa3;
-}
-
-.is-online .status-dot {
-  background: #31a46a;
-}
-
-.is-offline .status-dot {
-  background: #c58632;
-}
-
-.intro {
-  max-width: 660px;
-  padding: 64px 0 34px;
 }
 
 .eyebrow {
@@ -112,252 +158,6 @@ a {
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-h1,
-h2,
-h3,
-p {
-  margin-top: 0;
-}
-
-.intro h1 {
-  margin-bottom: 13px;
-  font-size: clamp(34px, 5vw, 52px);
-  letter-spacing: -0.045em;
-  line-height: 1.05;
-}
-
-.intro-copy {
-  max-width: 570px;
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-.workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.9fr);
-  gap: 18px;
-}
-
-.video-panel,
-.status-panel,
-.share-card {
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: 0 8px 26px rgb(24 49 35 / 4%);
-}
-
-.video-panel,
-.status-panel {
-  min-width: 0;
-  padding: 20px;
-}
-
-.panel-heading {
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.panel-heading .eyebrow {
-  margin-bottom: 5px;
-}
-
-.panel-heading h2 {
-  margin: 0;
-  font-size: 17px;
-  letter-spacing: -0.02em;
-}
-
-.upload-button,
-.mic-button {
-  display: inline-flex;
-  min-height: 42px;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border: 0;
-  border-radius: 11px;
-  background: var(--green);
-  color: white;
-  cursor: pointer;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 0 15px;
-  text-decoration: none;
-}
-
-.upload-button:hover {
-  background: var(--green-dark);
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  clip-path: inset(50%);
-}
-
-.visually-hidden:focus-visible + .upload-button,
-.upload-button:focus-visible,
-.mic-button:focus-visible,
-a:focus-visible {
-  outline: 3px solid var(--amber);
-  outline-offset: 3px;
-}
-
-.video-empty,
-.video-player {
-  display: grid;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 13px;
-  background: #e8eee8;
-}
-
-.video-player {
-  background: #111;
-  object-fit: contain;
-}
-
-.video-empty {
-  align-content: center;
-  color: var(--ink);
-  text-align: center;
-}
-
-.video-empty p {
-  margin: 11px 0 0;
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.video-empty .muted-copy {
-  margin-top: 6px;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.play-symbol {
-  display: grid;
-  width: 48px;
-  height: 48px;
-  place-items: center;
-  border-radius: 50%;
-  background: white;
-  color: var(--green);
-  font-size: 16px;
-  padding-left: 3px;
-}
-
-.video-footer {
-  gap: 12px;
-  margin-top: 15px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.status-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.trail-state {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  border-radius: 13px;
-  background: var(--green-soft);
-  padding: 14px;
-}
-
-.trail-icon {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 9px;
-  background: white;
-  color: var(--green);
-  font-weight: 800;
-}
-
-.trail-state strong {
-  display: block;
-  margin: 2px 0 4px;
-  font-size: 13px;
-}
-
-.trail-state p {
-  margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.event-list {
-  flex: 1;
-  padding-top: 24px;
-}
-
-.event-list-heading {
-  margin-bottom: 10px;
-}
-
-.event-list-heading h3 {
-  margin: 0;
-  font-size: 13px;
-}
-
-.event-list-heading span {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 8px;
-  background: #f1f4f1;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.empty-events {
-  margin-bottom: 20px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.mic-button {
-  width: 100%;
-  background: #eef1ee;
-  color: #768078;
-  cursor: not-allowed;
-}
-
-.page-footer {
-  gap: 16px;
-  padding-top: 25px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.page-footer a,
-.back-link {
-  color: var(--green-dark);
-  font-weight: 700;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
 }
 
 .share-shell {
@@ -381,6 +181,10 @@ a:focus-visible {
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 8px 26px rgb(24 49 35 / 4%);
   padding: 22px;
 }
 
@@ -389,6 +193,7 @@ a:focus-visible {
   height: 12px;
   flex: 0 0 auto;
   margin-top: 5px;
+  border-radius: 50%;
   background: #c58632;
 }
 
@@ -407,35 +212,14 @@ a:focus-visible {
 .back-link {
   display: inline-block;
   margin-top: 24px;
+  color: var(--green-dark);
   font-size: 13px;
+  font-weight: 700;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
-@media (max-width: 760px) {
-  .page-shell {
-    width: min(100% - 28px, 600px);
-    padding-top: 14px;
-  }
-
-  .intro {
-    padding: 48px 0 25px;
-  }
-
-  .workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .status-panel {
-    min-height: 300px;
-  }
-
-  .video-footer {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 5px;
-  }
-
-  .page-footer {
-    align-items: flex-start;
-    flex-direction: column;
-  }
+.back-link:focus-visible {
+  outline: 3px solid #f1c65a;
+  outline-offset: 3px;
 }
