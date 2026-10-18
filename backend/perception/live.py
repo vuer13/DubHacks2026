@@ -36,6 +36,7 @@ from ..models import (
     TrailState,
 )
 from .mk1 import get_client, get_model_name
+from .signs import SIGN_PROMPT, normalize_sign
 
 WINDOW_SECONDS = 6.0
 LIVE_SEGMENT_SECONDS = 1.0
@@ -260,7 +261,7 @@ def _request_clip_analysis(frames: list[TimedFrame]) -> ModelClipOutput:
                     "visible surface. Include a hazard only when it is clearly visible and on or "
                     "immediately beside the hiker's path. If evidence is uncertain or no hazard "
                     "is visible, return an empty hazards list. Do not infer hazards from motion, "
-                    "scene context, or the absence of a clear path.",
+                    "scene context, or the absence of a clear path." + SIGN_PROMPT,
                 ],
             }
         ],
@@ -367,6 +368,7 @@ def _log_model_call(
     status: Literal["ok", "error"],
     hazards: list[Hazard] | None = None,
     speak: list[SpeakEvent] | None = None,
+    sign: SignReading | None = None,
     error_type: str | None = None,
 ) -> None:
     hazard_data = [hazard.model_dump(mode="json") for hazard in (hazards or [])]
@@ -385,6 +387,7 @@ def _log_model_call(
         "status": status,
         "hazards": hazard_data,
         "speak": speak_data,
+        "sign": sign.model_dump(mode="json") if sign else None,
         "error_type": error_type,
     }
     try:
@@ -507,7 +510,7 @@ async def analyze_live_clip(
         trail_state=model_output.trail_state,
         surface=model_output.surface,
         scene=model_output.scene,
-        sign=model_output.sign,
+        sign=normalize_sign(model_output.sign),
         model=get_model_name(),
         latency_ms=latency_ms,
     )
@@ -526,6 +529,7 @@ async def analyze_live_clip(
         status="ok",
         hazards=event.hazards,
         speak=speak,
+        sign=event.sign,
     )
     window.last_used_at = monotonic()
     return ClipResponse(event=event, speak=speak)
