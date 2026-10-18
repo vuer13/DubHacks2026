@@ -1,27 +1,7 @@
 {
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": false,
-    "skipLibCheck": true,
     "strict": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
     "paths": {
       "@/*": [
         "./*"
@@ -29,13 +9,13 @@
     }
   },
   "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ],
-  "extends": "expo/tsconfig.base"
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "lib/api.ts",
+    "lib/schema.ts",
+    "lib/format.ts",
+    "lib/session.ts",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts"
+  ]
 }
