@@ -1,15 +1,19 @@
 """Safety API routes. Implement fall, location, and SOS logic in this lane."""
 
+import asyncio
 import json
 import logging
 import os
 import tempfile
 import threading
 import time
+from collections import deque
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, NoReturn
 from urllib.parse import quote
 
+import cv2
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import Field
 
@@ -24,7 +28,7 @@ from ..models import (
     SosResponse,
     TrailSenseModel,
 )
-from .fall import FallAssessment, FallSignals, assess
+from .fall import FallAssessment, FallSignals, assemble_fall_window, assess
 from .sos import cancel_sos as cancel_sos_for_session
 from .sos import call_sos as deliver_sos
 
@@ -32,6 +36,54 @@ router = APIRouter(prefix="/api", tags=["safety"])
 LOGGER = logging.getLogger(__name__)
 SESSION_DIR = Path(__file__).resolve().parents[1] / "data" / "sessions"
 _FALL_EVENTS_LOCK = threading.Lock()
+MAX_FALL_CLIP_BYTES = 25 * 1024 * 1024
+MAX_FALL_WINDOWS = 64
+FALL_WINDOW_TTL_SECONDS = 30 * 60
+
+
+@dataclass
+class FallClipWindow:
+    segments: deque[tuple[bytes, str]] = field(default_factory=lambda: deque(maxlen=3))
+    last_sequence: int = -1
+    last_used_at: float = field(default_factory=time.monotonic)
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
+_FALL_WINDOWS: dict[str, FallClipWindow] = {}
+_FALL_WINDOWS_LOCK = threading.Lock()
+
+
+def _get_fall_window(session_id: str) -> FallClipWindow:
+    now = time.monotonic()
+    with _FALL_WINDOWS_LOCK:
+        expired = [
+            key
+            for key, window in _FALL_WINDOWS.items()
+            if now - window.last_used_at > FALL_WINDOW_TTL_SECONDS
+            and not window.lock.locked()
+        ]
+        for key in expired:
+            _FALL_WINDOWS.pop(key, None)
+
+        window = _FALL_WINDOWS.get(session_id)
+        if window is None:
+            window = FallClipWindow()
+            _FALL_WINDOWS[session_id] = window
+        window.last_used_at = now
+
+        while len(_FALL_WINDOWS) > MAX_FALL_WINDOWS:
+            removable = next(
+                (
+                    key
+                    for key, candidate in _FALL_WINDOWS.items()
+                    if key != session_id and not candidate.lock.locked()
+                ),
+                None,
+            )
+            if removable is None:
+                break
+            _FALL_WINDOWS.pop(removable, None)
+        return window
 
 
 class FallSuspectedEvent(TrailSenseModel):
@@ -123,33 +175,77 @@ async def get_location(session_id: str) -> LocationResponse:
 async def check_for_fall(
     clip: UploadFile = File(...),
     session_id: str = Form(..., min_length=1, max_length=128),
+    windowed: bool = Form(False),
+    sequence: int | None = Form(None, ge=0),
 ) -> FallCheckResponse:
-    """Assess a clip for a fall.
+    """Assess a clip or append a three-second segment to a rolling fall window.
 
     Example:
         curl -F 'clip=@fall.webm' -F 'session_id=demo' \\
           http://localhost:8000/api/fall/check
+
+    Sliding-window clients upload three-second clips with the same session ID,
+    ``windowed=true``, and a zero-based sequence. After the first three clips,
+    each request assesses a nine-second window and advances it by three seconds.
+
+    Example:
+        curl -F 'clip=@segment_0.mp4' -F 'session_id=demo' \\
+          -F 'windowed=true' -F 'sequence=0' http://localhost:8000/api/fall/check
     """
-    suffix = Path(clip.filename or "").suffix.lower()
-    if not suffix or len(suffix) > 12 or not suffix[1:].isalnum():
-        suffix = ".mp4"
-
-    temp_path: Path | None = None
     try:
-        with tempfile.NamedTemporaryFile(
-            prefix="trailsense-fall-", suffix=suffix, delete=False
-        ) as temp_file:
-            temp_path = Path(temp_file.name)
-            while chunk := await clip.read(1024 * 1024):
-                temp_file.write(chunk)
-
-        if temp_path.stat().st_size == 0:
+        clip_bytes = await clip.read(MAX_FALL_CLIP_BYTES + 1)
+        if not clip_bytes:
             raise HTTPException(status_code=400, detail="Uploaded fall clip is empty")
+        if len(clip_bytes) > MAX_FALL_CLIP_BYTES:
+            raise HTTPException(status_code=413, detail="Fall video segments must be under 25 MB")
 
-        try:
-            assessment = await assess(temp_path)
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if windowed is True:
+            if sequence is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Sliding fall windows require a clip sequence number",
+                )
+            window = _get_fall_window(session_id)
+            async with window.lock:
+                if sequence != window.last_sequence + 1:
+                    window.segments.clear()
+                window.segments.append((clip_bytes, clip.filename or "camera.mp4"))
+                window.last_sequence = sequence
+                window.last_used_at = time.monotonic()
+                if len(window.segments) < 3:
+                    return FallCheckResponse(fell="unsure", confidence=0.0)
+
+                try:
+                    temp_path = await asyncio.to_thread(
+                        assemble_fall_window, list(window.segments)
+                    )
+                except (cv2.error, OSError, ValueError) as exc:
+                    raise HTTPException(status_code=422, detail=str(exc)) from exc
+                try:
+                    assessment = await assess(
+                        temp_path,
+                        video_segments=[segment for segment, _ in window.segments],
+                    )
+                except ValueError as exc:
+                    raise HTTPException(status_code=400, detail=str(exc)) from exc
+                finally:
+                    temp_path.unlink(missing_ok=True)
+        else:
+            suffix = Path(clip.filename or "").suffix.lower()
+            if not suffix or len(suffix) > 12 or not suffix[1:].isalnum():
+                suffix = ".mp4"
+            with tempfile.NamedTemporaryFile(
+                prefix="trailsense-fall-", suffix=suffix, delete=False
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                temp_file.write(clip_bytes)
+
+            try:
+                assessment = await assess(temp_path)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail=str(exc)) from exc
+            finally:
+                temp_path.unlink(missing_ok=True)
 
         if assessment.fell in ("yes", "unsure"):
             _record_fall_suspected(session_id, assessment)
@@ -160,8 +256,6 @@ async def check_for_fall(
         )
     finally:
         await clip.close()
-        if temp_path is not None:
-            temp_path.unlink(missing_ok=True)
 
 
 @router.post("/sos", response_model=SosResponse)

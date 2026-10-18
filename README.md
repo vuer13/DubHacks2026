@@ -59,12 +59,16 @@ Run it one of three ways:
 
 The app records repeated 3-second camera clips while monitoring is active. Each
 clip is sent to `POST /api/clip`; the backend analyzes a rolling six-second
-frame window with Perceptron and returns a validated hazard event. Camera
+frame window with Perceptron and returns a validated hazard event. Fall checks
+combine three clips into a rolling nine-second window, advancing every three
+seconds after the initial warm-up. Camera
 recordings restart between clips, so there can be a short boundary gap. Uploads
-run while the next clip records; if analysis falls behind, the app keeps only
-the newest waiting clip instead of growing a queue. Keep the app open in the
-foreground during live monitoring. On a physical phone, the backend URL must
-use the Mac's Wi-Fi IP.
+run while the next clip records and are analyzed in capture order. If model
+latency exceeds the three-second clip cadence, results can lag behind the live
+camera. One nine-second fall request took 37,302 ms at high reasoning effort;
+fall confirmation now uses medium effort, but latency still needs measuring and
+may cause stale clips to queue. Keep the app open in the foreground during live
+monitoring. On a physical phone, the backend URL must use the Mac's Wi-Fi IP.
 
 The backend health check is at http://localhost:8000/health.
 API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio

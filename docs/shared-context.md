@@ -104,14 +104,14 @@ All JSON. CORS open during development.
 | GET | `/health` | | `{"ok": true}` | A |
 | POST | `/api/analyze` | multipart `video` | `{"job_id": "..."}` | A |
 | GET | `/api/jobs/{job_id}` | | `{"status": "running\|done\|error", "events": [ClipEvent], "speak": [SpeakEvent]}` | A |
-| POST | `/api/clip` | multipart `clip` (the latest 3 s webm or mp4 chunk), `session_id`. The backend adds the chunk's frames to the session's running window and analyses the whole window | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
+| POST | `/api/clip` | multipart `clip` (short webm or mp4 segment), `session_id`; optional `sequence` for ordered three-second live segments. The backend adds frames to the session's running window | `{"event": ClipEvent, "speak": [SpeakEvent]}` | A |
 | POST | `/api/describe` | multipart `clip`, `session_id` | `{"scene": "...", "hazards": [...]}` | A |
 | POST | `/api/read_sign` | multipart `frame` (jpeg) or `clip`, `session_id` | `{"sign": SignReading}` | A |
 | GET | `/api/session/{session_id}/hazards` | | last 3 `ClipEvent`s, for voice tools | A |
 | POST | `/api/location` | `{"session_id","lat","lng","ts"}` | `{"ok": true, "off_trail": null or {...}}` | C |
 | GET | `/api/location/{session_id}` | | `{"latest": {...}, "track": [...]}` | C |
 | GET | `/api/trail/{trail_id}/brief` | | `{"text": "This hike is 2.1 km..."}` | C |
-| POST | `/api/fall/check` | multipart `clip`, `session_id` | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
+| POST | `/api/fall/check` | multipart `clip`, `session_id`; optional `windowed=true`, `sequence` for three-second rolling segments. The backend assesses a nine-second window, advancing by three seconds per request after warm-up | `{"fell": "yes\|no\|unsure", "confidence": 0.0}` | C |
 | POST | `/api/sos` | `{"session_id","reason","lat","lng","recent_events":[...]}` | `{"sent": true, "to": "+1..."}` | C |
 | POST | `/api/sos/cancel` | `{"session_id"}` | `{"cancelled": true}` | C |
 | GET | `/api/voice/token` | | `{"conversation_token": "..."}`. Calls ElevenLabs `GET /v1/convai/conversation/token?agent_id=...` with the server-side key; the app passes the token to the agent SDK (WebRTC). **Proposed 2026-10-18** | B |
@@ -164,7 +164,7 @@ Model `perceptron-mk1.5` on `https://api.perceptron.inc/v1/chat/completions` (`p
 | Confirm a severity 3 | Regex output | `regex="yes\|no"` |
 | Trail signs, junction posts, warning signs | OCR + structured output | `response_format` json_schema for `SignReading`, `reasoning_effort="high"` |
 | Scene description on demand | Plain text | `reasoning_effort="high"`, two sentences |
-| Fall confirmation | Structured output + audio | json_schema, `vision_config={"enable_audio_in_video": true}` so a thud or a cry counts. Sends the real clip, not frames, because audio needs it |
+| Fall confirmation | Structured output + audio | json_schema, `reasoning_effort="medium"`, `vision_config={"enable_audio_in_video": true}` so impact or distress sounds count. Sends real video clips, not frames, because audio needs them |
 | Demo script timestamps and recall check | Clip events | `vision_config={"annotation_format":"clip"}`, offline batch: contact sheets to find candidate segments, then `video_frames` at 1 fps with source timestamps |
 | Low-vision guidance arrow (stretch) | Video tracking | `vision_config={"annotation_format":"box"}`, "track the walkable trail", offline batch of `video_frames` at 2 fps, produces `track.json` |
 

@@ -44,12 +44,16 @@ async def get_job(job_id: str) -> JobResponse:
 async def analyze_clip(
     clip: UploadFile = File(...),
     session_id: str = Form(...),
+    sequence: int | None = Form(None, ge=0),
 ) -> ClipResponse:
-    """Analyze one short camera clip.
+    """Analyze a camera segment and update the rolling trail window.
 
     Example:
         curl -F 'clip=@clip.webm' -F 'session_id=demo' \\
           http://localhost:8000/api/clip
+
+    Live clients can include a zero-based ``sequence`` for three-second segments
+    so event timestamps follow capture order rather than model response latency.
     """
     if not session_id.strip():
         raise HTTPException(status_code=422, detail="session_id cannot be empty")
@@ -75,6 +79,7 @@ async def analyze_clip(
                 clip_bytes=clip_bytes,
                 filename=clip.filename or "camera.mp4",
                 window=window,
+                sequence=sequence,
             )
     except InvalidClipError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

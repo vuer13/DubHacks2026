@@ -38,6 +38,7 @@ from ..models import (
 from .mk1 import get_client, get_model_name
 
 WINDOW_SECONDS = 6.0
+LIVE_SEGMENT_SECONDS = 3.0
 FRAME_INTERVAL_SECONDS = 0.5
 FRAME_LONG_EDGE = 480
 MAX_SESSION_COUNT = 64
@@ -82,6 +83,7 @@ class SessionWindow:
     created_at: float = field(default_factory=monotonic)
     last_used_at: float = field(default_factory=monotonic)
     next_clip_number: int = 1
+    last_sequence: int | None = None
     frames: deque[TimedFrame] = field(default_factory=deque)
     events: list[ClipEvent] = field(default_factory=list)
     last_spoken: dict[tuple[str, str], tuple[float, str]] = field(default_factory=dict)
@@ -359,7 +361,12 @@ def _log_model_call(
 
 
 async def analyze_live_clip(
-    *, session_id: str, clip_bytes: bytes, filename: str, window: SessionWindow
+    *,
+    session_id: str,
+    clip_bytes: bytes,
+    filename: str,
+    window: SessionWindow,
+    sequence: int | None = None,
 ) -> ClipResponse:
     """Append clip frames to the rolling window, analyze, and return events."""
     try:
@@ -367,14 +374,25 @@ async def analyze_live_clip(
     except ValueError as exc:
         raise InvalidClipError(str(exc)) from exc
     received_at = monotonic()
-    if not window.frames:
-        window.created_at = received_at - duration
-    latest_previous_ms = window.frames[-1].timestamp_ms if window.frames else -1
-    clip_start_ms = max(0, int((received_at - window.created_at - duration) * 1000))
+    if sequence is not None:
+        if sequence == 0 or (
+            window.last_sequence is not None
+            and sequence != window.last_sequence + 1
+        ):
+            window.frames.clear()
+            window.last_spoken.clear()
+        window.last_sequence = sequence
+        # Live camera uploads are three-second segments, numbered in capture order.
+        clip_start_ms = round(sequence * LIVE_SEGMENT_SECONDS * 1000)
+    else:
+        if not window.frames:
+            window.created_at = received_at - duration
+        latest_previous_ms = window.frames[-1].timestamp_ms if window.frames else -1
+        clip_start_ms = max(0, int((received_at - window.created_at - duration) * 1000))
 
-    if latest_previous_ms >= 0 and clip_start_ms - latest_previous_ms > SESSION_RESET_GAP_SECONDS * 1000:
-        window.frames.clear()
-        window.last_spoken.clear()
+        if latest_previous_ms >= 0 and clip_start_ms - latest_previous_ms > SESSION_RESET_GAP_SECONDS * 1000:
+            window.frames.clear()
+            window.last_spoken.clear()
 
     for local_time, jpeg in sampled:
         timestamp_ms = clip_start_ms + round(local_time * 1000)

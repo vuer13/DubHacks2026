@@ -1,10 +1,10 @@
 import { useRouter } from "expo-router";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
+import { File } from "expo-file-system";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Speech from "expo-speech";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,53 +14,61 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { analyzeLiveClip, checkBackendHealth } from "@/lib/api";
+import { analyzeLiveClip, checkFallClip } from "@/lib/api";
 import { createSessionId } from "@/lib/session";
-import type { ClipEvent } from "@/lib/schema";
+import type { ClipEvent, ClipResponse, FallCheckResponse } from "@/lib/schema";
 
 const CHECKIN_SECONDS = 20;
-const CLIP_SECONDS = 3;
+const SEGMENT_SECONDS = 3;
 
-type PendingClip = { uri: string; generation: number };
+type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
 
 export default function HikerScreen() {
   const router = useRouter();
   const cameraRef = useRef<CameraView>(null);
   const processingRef = useRef(false);
-  const pendingClipRef = useRef<PendingClip | null>(null);
+  const pendingClipsRef = useRef<PendingClip[]>([]);
+  const clipSequenceRef = useRef(0);
   const generationRef = useRef(0);
   const monitoringRef = useRef(false);
+  const checkinTriggeredRef = useRef(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [microphonePermission, requestMicrophonePermission] = useMicrophonePermissions();
   const [sessionId] = useState(createSessionId);
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [live, setLive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
+  const [fallOnlyMode, setFallOnlyMode] = useState(true);
   const [lowVision, setLowVision] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [events, setEvents] = useState<ClipEvent[]>([]);
+  const [fallResult, setFallResult] = useState<FallCheckResponse | null>(null);
+  const [fallCheckStatus, setFallCheckStatus] = useState("Waiting for live camera segments");
   const [countdown, setCountdown] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [captureStatus, setCaptureStatus] = useState("Monitoring is off");
 
-  useEffect(() => {
-    let active = true;
-    const poll = async () => {
-      const online = await checkBackendHealth();
-      if (active) setBackendOnline(online);
-    };
-    void poll();
-    const timer = setInterval(() => void poll(), 5000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
+  const startCheckinPreview = useCallback(() => {
+    if (checkinTriggeredRef.current) return;
+    checkinTriggeredRef.current = true;
+    if (live) {
+      monitoringRef.current = false;
+      generationRef.current += 1;
+      cameraRef.current?.stopRecording();
+      setLive(false);
+      setCameraReady(false);
+      setCaptureStatus("Monitoring is off");
+    }
+    setNotice(null);
+    setCountdown(CHECKIN_SECONDS);
+    void Speech.stop();
+    Speech.speak("Are you okay? Tap the button if you are okay.", { rate: 0.95 });
+  }, [live]);
 
   useEffect(() => {
     if (countdown === null) return;
     if (countdown <= 0) {
       setCountdown(null);
-      setNotice("Preview ended. No SOS call was placed.");
+      setNotice("No response. The check-in ended; no SOS call was placed.");
       return;
     }
     const timer = setTimeout(() => setCountdown((seconds) => (seconds === null ? null : seconds - 1)), 1000);
@@ -74,53 +82,109 @@ export default function HikerScreen() {
     if (!camera) return;
 
     const uploadClip = (uri: string) => {
-      const job: PendingClip = { uri, generation: generationRef.current };
-      if (processingRef.current) {
-        // Keep only the freshest waiting view so a slow model cannot build a backlog.
-        pendingClipRef.current = job;
-        return;
+      pendingClipsRef.current.push({
+        uri,
+        generation: generationRef.current,
+        fallOnly: fallOnlyMode,
+        sequence: clipSequenceRef.current++,
+      });
+      if (pendingClipsRef.current.length > 0) {
+        setCaptureStatus(
+            `${pendingClipsRef.current.length} three-second clip${pendingClipsRef.current.length === 1 ? "" : "s"} waiting for analysis`,
+        );
       }
+      if (processingRef.current) return;
 
       processingRef.current = true;
       void (async () => {
-        let next: PendingClip | null = job;
-        while (next !== null) {
-          const current = next;
-          try {
-            const response = await analyzeLiveClip(current.uri, sessionId);
-            if (monitoringRef.current && current.generation === generationRef.current) {
-              setEvents((previous) => [response.event, ...previous].slice(0, 8));
-              setNotice(null);
-              setCaptureStatus("Recording and analyzing live clips");
-              const warning = response.speak[0];
-              if (warning) {
-                void Speech.stop();
-                Speech.speak(warning.say, { rate: 0.92 });
-              }
-            }
-          } catch (error) {
-            if (monitoringRef.current && current.generation === generationRef.current) {
-              const message = error instanceof Error ? error.message : "Clip analysis failed";
-              setNotice(`Could not analyze the latest clip: ${message}`);
-              setCaptureStatus("Camera is recording; backend analysis is unavailable");
-            }
+        while (pendingClipsRef.current.length > 0) {
+          const current = pendingClipsRef.current.shift();
+          if (!current) continue;
+          const isMonitoring =
+            monitoringRef.current && current.generation === generationRef.current;
+          if (!isMonitoring) {
+            deleteRecordedClip(current.uri);
+            continue;
           }
-          next = pendingClipRef.current;
-          pendingClipRef.current = null;
+
+          setFallCheckStatus(
+            current.sequence < 2
+              ? `Filling the 9-second window (${current.sequence + 1}/3 clips)…`
+              : `Assessing the latest sliding 9-second window…`,
+          );
+          let trailResult: PromiseSettledResult<ClipResponse> | null = null;
+          let fallCheck: PromiseSettledResult<FallCheckResponse>;
+          if (current.fallOnly) {
+            const [result] = await Promise.allSettled([
+              checkFallClip(current.uri, sessionId, current.sequence),
+            ]);
+            fallCheck = result;
+          } else {
+            [trailResult, fallCheck] = await Promise.allSettled([
+              analyzeLiveClip(current.uri, sessionId, current.sequence),
+              checkFallClip(current.uri, sessionId, current.sequence),
+            ]);
+          }
+
+          const isCurrent = monitoringRef.current && current.generation === generationRef.current;
+          if (isCurrent && trailResult?.status === "fulfilled") {
+            const response = trailResult.value;
+            setEvents((previous) => [response.event, ...previous].slice(0, 8));
+            setCaptureStatus("Recording and analyzing live segments");
+            const warning = response.speak[0];
+            if (warning) {
+              void Speech.stop();
+              Speech.speak(warning.say, { rate: 0.92 });
+            }
+          } else if (isCurrent && trailResult?.status === "rejected") {
+            const message = trailResult.reason instanceof Error ? trailResult.reason.message : "Clip analysis failed";
+            setNotice(`Could not analyze the latest trail clip: ${message}`);
+            setCaptureStatus("Camera is recording; backend analysis is unavailable");
+          }
+          if (isCurrent && fallCheck.status === "fulfilled") {
+            if (current.sequence >= 2) setFallResult(fallCheck.value);
+            setFallCheckStatus(
+              current.sequence < 2
+                ? `Waiting for clip ${current.sequence + 2}/3 to complete the first 9-second window`
+                : "Latest sliding window assessed",
+            );
+            if (fallCheck.value.fell === "yes" && !checkinTriggeredRef.current) {
+              startCheckinPreview();
+            }
+          } else if (isCurrent && fallCheck.status === "rejected") {
+            const message = fallCheck.reason instanceof Error ? fallCheck.reason.message : "Fall check failed";
+            setFallCheckStatus(`Fall check failed: ${message}`);
+          }
+          deleteRecordedClip(current.uri);
+          if (monitoringRef.current && current.generation === generationRef.current) {
+            const queued = pendingClipsRef.current.length;
+            setCaptureStatus(
+              queued === 0
+              ? "Recording three-second clips for sliding windows"
+              : `${queued} three-second clip${queued === 1 ? "" : "s"} queued for analysis`,
+            );
+          }
         }
         processingRef.current = false;
-      })();
+      })().catch((error: unknown) => {
+        processingRef.current = false;
+        const message = error instanceof Error ? error.message : "Clip processing failed";
+        setFallCheckStatus(`Clip processing failed: ${message}`);
+      });
     };
 
     const captureLoop = async () => {
-      setCaptureStatus("Recording 3-second trail clips");
+      setCaptureStatus("Recording three-second clips for sliding windows");
       while (active) {
         try {
           const recorded = await camera.recordAsync({
-            maxDuration: CLIP_SECONDS,
+            maxDuration: SEGMENT_SECONDS,
             maxFileSize: 24 * 1024 * 1024,
           });
-          if (!active) break;
+          if (!active) {
+            if (recorded?.uri) deleteRecordedClip(recorded.uri);
+            break;
+          }
           if (recorded?.uri) uploadClip(recorded.uri);
         } catch {
           if (!active) break;
@@ -137,15 +201,13 @@ export default function HikerScreen() {
     void captureLoop();
     return () => {
       active = false;
-      pendingClipRef.current = null;
       camera.stopRecording();
     };
-  }, [live, cameraReady, sessionId]);
+  }, [live, cameraReady, fallOnlyMode, sessionId, startCheckinPreview]);
 
   useEffect(() => () => {
     monitoringRef.current = false;
     generationRef.current += 1;
-    pendingClipRef.current = null;
     cameraRef.current?.stopRecording();
     void Speech.stop();
   }, []);
@@ -154,7 +216,6 @@ export default function HikerScreen() {
     if (live) {
       monitoringRef.current = false;
       generationRef.current += 1;
-      pendingClipRef.current = null;
       cameraRef.current?.stopRecording();
       setLive(false);
       setCameraReady(false);
@@ -163,46 +224,36 @@ export default function HikerScreen() {
       return;
     }
 
-    if (!backendOnline) {
-      setNotice("Start the backend and wait for Backend connected before monitoring.");
-      return;
-    }
     const permission = cameraPermission?.granted ? cameraPermission : await requestCameraPermission();
     if (permission.granted) {
+      const micPermission = microphonePermission?.granted
+        ? microphonePermission
+        : await requestMicrophonePermission();
       generationRef.current += 1;
       monitoringRef.current = true;
+      checkinTriggeredRef.current = false;
+      clipSequenceRef.current = 0;
       setCameraReady(false);
+      setFallResult(null);
+      setFallCheckStatus("Waiting to fill the first 9-second window");
       setLive(true);
-      setNotice(null);
+      setNotice(micPermission.granted ? null : "Microphone is off. Fall checks will use video only.");
     } else {
       setNotice("Camera permission is needed for live monitoring.");
     }
   };
 
-  const startCheckinPreview = () => {
-    if (live) {
-      monitoringRef.current = false;
-      generationRef.current += 1;
-      pendingClipRef.current = null;
-      cameraRef.current?.stopRecording();
-      setLive(false);
-      setCameraReady(false);
-      setCaptureStatus("Monitoring is off");
-    }
-    setNotice(null);
-    setCountdown(CHECKIN_SECONDS);
-  };
-
   const cancelCheckinPreview = () => {
     setCountdown(null);
-    setNotice("Cancelled. Help is not being called.");
+    void Speech.stop();
+    setNotice("Check-in cancelled. No SOS call was placed.");
   };
 
   const latestEvent = events[0];
   const latestHazard = latestEvent?.hazards[0];
-  const statusTitle = latestHazard?.say ?? (latestEvent ? "Trail clear" : "Ready to monitor");
-  const healthLabel = backendOnline === null ? "Checking backend" : backendOnline ? "Backend connected" : "Backend offline";
-
+  const statusTitle = fallOnlyMode
+    ? "Fall-only test"
+    : latestHazard?.say ?? (latestEvent ? "Trail clear" : "Ready to monitor");
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
       {live ? <KeepCameraAwake /> : null}
@@ -211,21 +262,13 @@ export default function HikerScreen() {
           <Text style={styles.brand}>TrailSense</Text>
           <Text style={styles.subtitle}>Trail guidance and safety</Text>
         </View>
-        <View style={styles.healthPill}>
-          {backendOnline === null ? (
-            <ActivityIndicator size="small" color={COLORS.muted} />
-          ) : (
-            <View style={[styles.healthDot, { backgroundColor: backendOnline ? COLORS.health : COLORS.danger }]} />
-          )}
-          <Text style={styles.healthText}>{healthLabel}</Text>
-        </View>
       </View>
 
       {countdown !== null ? (
         <View style={styles.checkinOverlay}>
-          <Text style={styles.checkinEyebrow}>CHECK-IN PREVIEW · NO CALL WILL BE PLACED</Text>
+          <Text style={styles.checkinEyebrow}>FALL CHECK-IN · DEV MODE · NO CALL WILL BE PLACED</Text>
           <Text style={styles.checkinTitle}>Are you okay?</Text>
-          <Text style={styles.checkinBody}>Say anything or tap below to cancel.</Text>
+          <Text style={styles.checkinBody}>Tap below if you are okay. This test does not place a call.</Text>
           <Text accessibilityLabel={`${countdown} seconds remaining`} style={styles.countdown}>
             {countdown}
           </Text>
@@ -242,18 +285,26 @@ export default function HikerScreen() {
           ) : null}
 
           <View style={styles.statusCard}>
-            <Text style={styles.eyebrow}>{lowVision ? "LOW-VISION VIEW" : "HIKE STATUS"}</Text>
+            <Text style={styles.eyebrow}>
+              {lowVision ? "LOW-VISION VIEW" : fallOnlyMode ? "FALL TEST" : "HIKE STATUS"}
+            </Text>
             <Text accessibilityLiveRegion="polite" style={lowVision ? styles.lowVisionText : styles.statusTitle}>
               {statusTitle}
             </Text>
             <Text style={styles.statusBody}>
-              {live ? captureStatus : backendOnline ? "Start monitoring to analyze the trail from the live camera." : "Connect to the backend before starting live monitoring."}
+              {live
+                ? captureStatus
+                : fallOnlyMode
+                  ? "Test fall detection indoors with a controlled staged movement."
+                  : "Start monitoring to analyze the trail from the live camera."}
             </Text>
           </View>
 
           <View style={styles.previewCard}>
             <View style={styles.previewHeader}>
-              <Text style={styles.sectionTitle}>{live ? "Live trail camera" : "Trail camera"}</Text>
+              <Text style={styles.sectionTitle}>
+                {fallOnlyMode ? "Fall-test camera" : live ? "Live trail camera" : "Trail camera"}
+              </Text>
               {live ? <Text style={styles.liveTag}>LIVE</Text> : null}
             </View>
             {live ? (
@@ -263,43 +314,75 @@ export default function HikerScreen() {
                 facing="back"
                 mode="video"
                 videoQuality="480p"
-                mute
                 active
                 onCameraReady={() => setCameraReady(true)}
               />
             ) : (
               <View style={styles.previewPlaceholder}>
                 <Text style={styles.previewIcon}>◉</Text>
-                <Text style={styles.previewText}>Camera is off</Text>
-                <Text style={styles.previewHint}>When active, TrailSense records short clips and analyzes them as you hike.</Text>
+              <Text style={styles.previewText}>Camera is off</Text>
+                <Text style={styles.previewHint}>
+                  {fallOnlyMode
+                    ? "No hike needed. Point the camera at a person for a safe, staged fall test."
+                    : "When active, TrailSense records short clips and analyzes them as you hike."}
+                </Text>
               </View>
             )}
             <View style={styles.actionRow}>
-              <ActionButton label={live ? "Stop monitoring" : "Start monitoring"} onPress={() => void toggleMonitoring()} />
+              <ActionButton
+                label={live ? "Stop monitoring" : fallOnlyMode ? "Start fall test" : "Start trail monitoring"}
+                onPress={() => void toggleMonitoring()}
+              />
             </View>
           </View>
 
           <View style={styles.controlsCard}>
             <ControlRow label="Low-vision display" value={lowVision} onChange={setLowVision} />
             <View style={styles.divider} />
-            <Pressable accessibilityRole="button" onPress={() => setShowLog((open) => !open)} style={styles.rowButton}>
-              <View>
-                <Text style={styles.rowTitle}>Trail events</Text>
-                <Text style={styles.rowSubtitle}>{events.length === 0 ? "No events yet" : `${events.length} recent clip analyses`}</Text>
-              </View>
-              <Text style={styles.rowAction}>{showLog ? "Hide" : "Show"}</Text>
-            </Pressable>
-            {showLog ? (
-              events.length ? events.map((event) => (
-                <View key={event.clip_id} style={styles.eventRow}>
-                  <Text style={styles.eventTitle}>{event.hazards[0]?.say ?? "Trail clear"}</Text>
-                  <Text style={styles.rowSubtitle}>{event.scene}</Text>
-                </View>
-              )) : <Text style={styles.logEmpty}>Warnings and trail events will appear here.</Text>
+            <ControlRow
+              label="Fall-only test mode"
+              value={fallOnlyMode}
+              onChange={setFallOnlyMode}
+              disabled={live}
+              subtitle={fallOnlyMode ? "Fall detection only; no hike needed" : "Analyze falls and trail hazards"}
+            />
+            {!fallOnlyMode ? (
+              <>
+                <View style={styles.divider} />
+                <Pressable accessibilityRole="button" onPress={() => setShowLog((open) => !open)} style={styles.rowButton}>
+                  <View>
+                    <Text style={styles.rowTitle}>Trail events</Text>
+                    <Text style={styles.rowSubtitle}>{events.length === 0 ? "No events yet" : `${events.length} recent clip analyses`}</Text>
+                  </View>
+                  <Text style={styles.rowAction}>{showLog ? "Hide" : "Show"}</Text>
+                </Pressable>
+                {showLog ? (
+                  events.length ? events.map((event) => (
+                    <View key={event.clip_id} style={styles.eventRow}>
+                      <Text style={styles.eventTitle}>{event.hazards[0]?.say ?? "Trail clear"}</Text>
+                      <Text style={styles.rowSubtitle}>{event.scene}</Text>
+                    </View>
+                  )) : <Text style={styles.logEmpty}>Warnings and trail events will appear here.</Text>
+                ) : null}
+              </>
             ) : null}
           </View>
 
           <View style={styles.bottomActions}>
+            <View style={styles.fallTestCard}>
+              <Text style={styles.sectionTitle}>{fallOnlyMode ? "Indoor fall-only test" : "Live fall detection"}</Text>
+              <Text style={styles.rowSubtitle}>
+                {fallOnlyMode
+                  ? "Three-second clips build a rolling 9-second fall window. Each new clip advances it by 3 seconds, keeping 6 seconds of previous context. A YES opens the check-in; this test will not place a call."
+                  : "Three-second clips build rolling windows for falls and trail hazards. Each new clip advances the fall window by 3 seconds, keeping 6 seconds of previous context. A YES opens the check-in; this test will not place a call."}
+              </Text>
+              <Text accessibilityLiveRegion="polite" style={styles.fallStatus}>{fallCheckStatus}</Text>
+              {fallResult ? (
+                <Text accessibilityLiveRegion="polite" style={styles.fallResult}>
+                  Latest result: {fallResult.fell.toUpperCase()} · {Math.round(fallResult.confidence * 100)}% confidence
+                </Text>
+              ) : null}
+            </View>
             <ActionButton label="Preview fall check-in" onPress={startCheckinPreview} secondary />
             <Pressable
               accessibilityRole="button"
@@ -313,6 +396,14 @@ export default function HikerScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+function deleteRecordedClip(uri: string) {
+  try {
+    new File(uri).delete();
+  } catch {
+    // The camera may already have removed its temporary recording.
+  }
 }
 
 function KeepCameraAwake() {
@@ -332,17 +423,32 @@ function ActionButton({ label, onPress, secondary = false }: { label: string; on
   );
 }
 
-function ControlRow({ label, value, onChange }: { label: string; value: boolean; onChange: (value: boolean) => void }) {
+function ControlRow({
+  label,
+  value,
+  onChange,
+  subtitle,
+  disabled = false,
+}: {
+  label: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+  subtitle?: string;
+  disabled?: boolean;
+}) {
   return (
     <View style={styles.controlRow}>
       <View>
         <Text style={styles.rowTitle}>{label}</Text>
-        <Text style={styles.rowSubtitle}>{value ? "Large high-contrast guidance" : "Standard guidance view"}</Text>
+        <Text style={styles.rowSubtitle}>
+          {subtitle ?? (value ? "Large high-contrast guidance" : "Standard guidance view")}
+        </Text>
       </View>
       <Switch
         accessibilityLabel={label}
         value={value}
         onValueChange={onChange}
+        disabled={disabled}
         trackColor={{ false: COLORS.divider, true: COLORS.accent }}
         thumbColor={COLORS.text}
       />
@@ -359,8 +465,6 @@ const COLORS = {
   muted: "#AEBBB2",
   accent: "#1B5A38",
   bright: "#5FC98A",
-  health: "#4CC37A",
-  danger: "#FF5C5C",
   warning: "#FFD60A",
   dark: "#000000",
 };
@@ -370,9 +474,6 @@ const styles = StyleSheet.create({
   header: { minHeight: 76, paddingHorizontal: 20, paddingBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderBottomWidth: 1, borderBottomColor: COLORS.divider },
   brand: { color: COLORS.text, fontSize: 24, fontWeight: "800", letterSpacing: 0.3 },
   subtitle: { color: COLORS.muted, fontSize: 14, marginTop: 3 },
-  healthPill: { minHeight: 40, maxWidth: 160, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, borderRadius: 20, backgroundColor: COLORS.surface },
-  healthDot: { width: 10, height: 10, borderRadius: 5 },
-  healthText: { color: COLORS.text, fontSize: 12, fontWeight: "600", flexShrink: 1 },
   content: { padding: 16, paddingBottom: 32, gap: 16 },
   notice: { backgroundColor: COLORS.surfaceRaised, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: COLORS.divider },
   noticeText: { color: COLORS.text, fontSize: 15, lineHeight: 22 },
@@ -407,6 +508,9 @@ const styles = StyleSheet.create({
   eventTitle: { color: COLORS.text, fontSize: 16, fontWeight: "700" },
   logEmpty: { color: COLORS.muted, fontSize: 15, lineHeight: 22, paddingBottom: 16 },
   bottomActions: { gap: 10 },
+  fallTestCard: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
+  fallStatus: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
+  fallResult: { color: COLORS.bright, fontSize: 18, fontWeight: "800" },
   shareButton: { minHeight: 56, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 1, borderColor: COLORS.bright },
   shareButtonText: { color: COLORS.bright, fontSize: 16, fontWeight: "700" },
   checkinOverlay: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.warning, paddingHorizontal: 24 },
