@@ -1,4 +1,4 @@
-"""Turn a whole trail video into a list of ClipEvents (the job file).
+"""Turn a whole trail video into a job file: events plus spoken warnings.
 
 Run from the project root:
     python -m backend.perception.pipeline footage/test-video.MOV --job test
@@ -6,14 +6,14 @@ Run from the project root:
 
 import argparse
 import asyncio
-import json
 from pathlib import Path
 
 import backend.config  # noqa: F401  (loads the root .env)
 
-from ..models import ClipEvent
+from ..models import ClipEvent, JobResponse
 from .frames import STRIDE_S, WINDOW_S, Frame, extract_frames
 from .mk1 import analyze_window
+from .smoothing import run_smoother
 
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
@@ -57,19 +57,35 @@ async def analyze_video(
     semaphore = asyncio.Semaphore(concurrency)
     results: list[ClipEvent | None] = [None] * len(windows)
 
-    def save() -> None:
-        done = [e.model_dump(mode="json") for e in results if e is not None]
-        job_path.write_text(json.dumps(done, indent=2))
+    def save(status: str) -> None:
+        """Write the job file: status, events so far, and spoken warnings."""
+        done = [e for e in results if e is not None]
+        # The smoother needs events in order with no gaps, so it only sees
+        # the unbroken run of finished windows from the start.
+        prefix: list[ClipEvent] = []
+        for e in results:
+            if e is None:
+                break
+            prefix.append(e)
+        job = JobResponse(
+            status=status, events=done, speak=run_smoother(prefix)
+        )
+        job_path.write_text(job.model_dump_json(indent=2))
 
     async def run(index: int, clip_id: str, chunk: list[Frame]) -> None:
         async with semaphore:
             results[index] = await analyze_window(chunk, clip_id=clip_id)
-            save()
+            save("running")
             print(f"  done {clip_id}")
 
-    await asyncio.gather(
-        *(run(i, cid, chunk) for i, (cid, chunk) in enumerate(windows))
-    )
+    try:
+        await asyncio.gather(
+            *(run(i, cid, chunk) for i, (cid, chunk) in enumerate(windows))
+        )
+    except Exception:
+        save("error")
+        raise
+    save("done")
     return [e for e in results if e is not None]
 
 
@@ -82,6 +98,11 @@ def print_summary(events: list[ClipEvent]) -> None:
             f"{e.clip_id:<10}{e.t_start:>7.1f}{e.t_end:>7.1f}"
             f"{len(e.hazards):>3}  {label:<22}{e.latency_ms:>6}"
         )
+
+    speak = run_smoother(events)
+    print(f"\n{len(speak)} spoken warnings")
+    for s in speak:
+        print(f"  t={s.t:>6.1f}  priority {s.priority}  {s.say}")
 
 
 def main() -> None:
