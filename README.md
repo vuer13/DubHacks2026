@@ -9,9 +9,7 @@ The app is React Native with Expo (SDK 57) and Expo Router: one codebase for the
 ## Prerequisites
 
 - Python 3.11
-- Node.js 22.13 or newer, and npm
-- On your phone: Expo Go from the App Store or Google Play (for UI work)
-- For the voice agent: Xcode (iPhone) or Android Studio, or an Expo account for cloud builds; see `frontend/docs/dev-build.md`
+- Node.js 22.13+ and npm
 - FFmpeg for the planned video clip processing. The current scaffold does not use it yet.
 
 On macOS with Homebrew, install the system tools with:
@@ -29,7 +27,7 @@ Backend, from the repository root:
     python -m pip install --upgrade pip
     python -m pip install -r backend/requirements.txt
     cp backend/.env.example .env
-    uvicorn backend.main:app --reload --port 8000
+    uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
 
 Keep backend keys in the repository-root `.env` file. The backend loads only
 that file for local settings.
@@ -39,27 +37,15 @@ App, in another terminal:
     cd frontend
     npm install
     cp .env.example .env
+    npx expo start
 
-Set `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env` to your Mac's LAN IP
-(`http://192.168.x.x:8000`, find it with `ipconfig getifaddr en0`); on a phone,
-`localhost` means the phone. Put no keys in `frontend/.env`: every
-`EXPO_PUBLIC_` value is bundled into the app.
-
-Run it one of three ways:
-
-- **Expo Go** (UI work, no build): `npx expo start --go`, then scan the QR code
-  with the phone's camera (iPhone) or from Expo Go (Android). Phone and Mac on
-  the same Wi-Fi.
-- **Development build** (everything, including the voice agent): install the
-  TrailSense development build once (`frontend/docs/dev-build.md`), then
-  `npx expo start --dev-client` and open the TrailSense app.
-- **Web share page**: `npx expo start --web`, then open
-  `http://localhost:8081/share/demo`.
-
-Checks: `npm run check` runs the typecheck, token check and state checks.
-The backend health check is at http://localhost:8000/health.
-API keys are only needed when you implement the Perceptron, ElevenLabs, or Twilio
-integrations, and they all live in the repository-root `.env`.
+Scan the QR code with Expo Go on your phone. Keep the phone and computer on the
+same Wi-Fi network. Set `EXPO_PUBLIC_BACKEND_URL` in `frontend/.env` to
+`http://<computer-wifi-ip>:8000` so the phone can reach FastAPI. On the computer,
+the backend health check is at http://localhost:8000/health.
+Keep Perceptron and Twilio secrets in the repository-root `.env`; do not put
+secrets in the Expo app's public environment variables. The current voice client
+and fall check-in UI are still being integrated.
 
 ## Code ownership
 

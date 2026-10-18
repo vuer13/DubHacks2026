@@ -99,8 +99,8 @@ The smart glasses example Perceptron published (navigation with OCR and web sear
 This is the browser SDK the Next.js app planned to use; kept for reference. The TrailSense app uses the React Native SDK in the next section.
 
 
-- Packages: `@elevenlabs/react` (hook `useConversation`, needs a `ConversationProvider`) or `@elevenlabs/client` (`Conversation.startSession`).
-- Auth for a private agent: server calls `GET https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=...` with `xi-api-key`, gets `{"signed_url": "wss://..."}`, valid 15 minutes. Browser passes `signedUrl` to `startSession` with `connectionType: "websocket"`. WebRTC uses a conversation token from the token endpoint instead; WebSocket is enough for us.
+- Use a React Native compatible WebSocket client from the Expo app; do not expose the API key in the app bundle.
+- Auth for a private agent: server calls `GET https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=...` with `xi-api-key`, gets `{"signed_url": "wss://..."}`, valid 15 minutes. The app connects with the returned signed URL. WebRTC uses a conversation token from the token endpoint instead; WebSocket is enough for us.
 - Hook options: `clientTools: { name: async (params) => result }`, `overrides: { agent: { prompt: { prompt }, firstMessage, language }, tts: { voiceId } }`. Overrides must be enabled per field in the agent's Security tab or the session errors.
 - Methods: `startSession`, `endSession`, `sendUserMessage(text)` (treated as the hiker speaking, triggers a reply), `sendContextualUpdate(text)` (background info, no reply), `sendUserActivity()` (holds agent speech about 2 s), `setVolume({volume})`, `setMuted`.
 - Callbacks: `onMessage` (user transcripts tentative or final, agent replies), `onModeChange` (`speaking` or `listening`), `onStatusChange`, `onError`.
