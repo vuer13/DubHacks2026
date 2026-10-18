@@ -15,6 +15,7 @@ export type IconName =
   | "mic"
   | "waveform"
   | "alert"
+  | "phone"
   | "chevron-down"
   | "chevron-up"
   | "arrow-left"
@@ -40,6 +41,8 @@ const shapes: Record<IconName, ReactElement> = {
       <path d="M12 7v6 M12 16.5h.01" />
     </>
   ),
+  // Phone handset from frame S3 (the SOS word row).
+  phone: <path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z" />,
   "chevron-down": <path d="M6 9l6 6 6-6" />,
   "chevron-up": <path d="M6 15l6-6 6 6" />,
   "arrow-left": <path d="M20 12H4 M10 6l-6 6 6 6" />,

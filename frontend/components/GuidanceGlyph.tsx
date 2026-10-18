@@ -10,7 +10,8 @@ import type { ReactElement } from "react";
  * `npm run check:ui` fails if these paths drift from the SVG files.
  */
 
-export type GuidanceGlyphKind = "ahead" | "steer-left" | "steer-right" | "stop" | "fork-left" | "fork-right";
+/** "fork" is the neutral fork for a junction with no readable sign; the handoff only draws the two sided forks. */
+export type GuidanceGlyphKind = "ahead" | "steer-left" | "steer-right" | "stop" | "fork" | "fork-left" | "fork-right";
 
 export type GuidanceGlyphProps = {
   kind: GuidanceGlyphKind;
@@ -26,6 +27,7 @@ const labels: Record<GuidanceGlyphKind, string> = {
   stop: "Stop",
   "fork-right": "Fork, take the right branch",
   "fork-left": "Fork, take the left branch",
+  fork: "Fork ahead",
 };
 
 const ahead = (
@@ -74,6 +76,15 @@ const forkRight = (
   </>
 );
 
+// Neutral fork: the handoff's stem, both branches at the stem's 24px weight, no arrowhead.
+const forkNeutral = (
+  <>
+    <path d="M195 600V430" fill="none" stroke="currentColor" strokeWidth={24} strokeLinecap="round" />
+    <path d="M195 430L95 290" fill="none" stroke="currentColor" strokeWidth={24} strokeLinecap="round" />
+    <path d="M195 430L295 290" fill="none" stroke="currentColor" strokeWidth={24} strokeLinecap="round" />
+  </>
+);
+
 const mirror = (shape: ReactElement) => <g transform="scale(-1,1) translate(-390,0)">{shape}</g>;
 
 const drawings: Record<GuidanceGlyphKind, ReactElement> = {
@@ -83,6 +94,7 @@ const drawings: Record<GuidanceGlyphKind, ReactElement> = {
   stop,
   "fork-right": forkRight,
   "fork-left": mirror(forkRight),
+  fork: forkNeutral,
 };
 
 export function GuidanceGlyph({ kind, size, ariaLabel }: GuidanceGlyphProps) {

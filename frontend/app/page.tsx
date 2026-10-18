@@ -5,12 +5,17 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import { HikerScreen } from "@/components/hiker/HikerScreen";
 import { checkBackendHealth } from "@/lib/api";
 import { getSessionId } from "@/lib/session";
-import { hikerReducer, initialHikerState, selectHikerView } from "@/lib/ui/state";
+import { selectLowVisionView } from "@/lib/ui/lowvision";
+import { CHECKIN_SECONDS, hikerReducer, initialHikerState, selectHikerView } from "@/lib/ui/state";
+import { useCheckinClock } from "@/lib/ui/useCheckinClock";
+import { useWakeLock } from "@/lib/wakelock";
 
 const HEALTH_POLL_MS = 5000;
 
 // Later app-and-voice steps wire these; for now they render and do nothing.
 function notWiredYet() {}
+
+const IS_DEV = process.env.NODE_ENV !== "production";
 
 export default function HomePage() {
   const [state, dispatch] = useReducer(hikerReducer, initialHikerState);
@@ -53,12 +58,19 @@ export default function HomePage() {
     [video],
   );
 
+  // Countdown ticks and the 3 s cancelled message. Step B5 will start check-ins from fall detection.
+  useCheckinClock(state.checkin, dispatch);
+  // Keep the screen awake while a hike is running or low-vision mode is on.
+  useWakeLock(state.mode !== "idle" || state.lowVision);
+
   const view = useMemo(() => selectHikerView(state, now), [state, now]);
+  const lowVision = useMemo(() => selectLowVisionView(state, now), [state, now]);
 
   return (
     <HikerScreen
       state={state}
       view={view}
+      lowVision={lowVision}
       {...(sessionId ? { sessionId } : {})}
       {...(video ? { videoUrl: video.url, videoName: video.name } : {})}
       handlers={{
@@ -74,6 +86,13 @@ export default function HomePage() {
         onMicPress: notWiredYet,
         onLiveChange: (on) => dispatch({ type: "mode_changed", mode: on ? "live" : video ? "replay" : "idle" }),
         onLowVisionChange: (on) => dispatch({ type: "low_vision_toggled", on }),
+        onCheckinCancel: () => dispatch({ type: "checkin_cancelled" }),
+        onSosCancel: () => {
+          if (window.confirm("Cancel the SOS alert?")) dispatch({ type: "sos_cancelled" });
+        },
+        ...(IS_DEV
+          ? { onTestCheckin: () => dispatch({ type: "checkin_started", seconds: CHECKIN_SECONDS }) }
+          : {}),
       }}
     />
   );
