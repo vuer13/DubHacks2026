@@ -39,6 +39,7 @@ from .mk1 import get_client, get_model_name
 
 WINDOW_SECONDS = 6.0
 LIVE_SEGMENT_SECONDS = 1.0
+LIVE_ANALYSIS_STRIDE_SEGMENTS = 3
 FRAME_INTERVAL_SECONDS = 0.5
 FRAME_LONG_EDGE = 480
 MAX_SESSION_COUNT = 64
@@ -243,15 +244,23 @@ def _request_clip_analysis(frames: list[TimedFrame]) -> ModelClipOutput:
                     video,
                     "You are analyzing a chest-mounted camera for a visually impaired hiker. "
                     "These timestamped frames show the recent trail. Identify only visible "
-                    "immediate trail hazards from this list: drop_off, steep_descent, water, "
-                    "loose_rock, roots_steps, low_branch, fork, mud_ice, wildlife, people. "
+                    "trail hazards from this list: drop_off, steep_descent, water, loose_rock, "
+                    "roots_steps, low_branch, fork, mud_ice, wildlife, people. Treat exposed "
+                    "roots, steps, holes, uneven ground, and other clear trip risks as roots_steps; "
+                    "loose stones or debris as loose_rock; and overhead obstructions as low_branch. "
+                    "Report a person or animal only when they are in, entering, or immediately "
+                    "beside the walking path and could cause a collision. Also report any other "
+                    "clearly visible danger represented by these categories. Ignore people, animals, "
+                    "and objects safely away from the path. "
                     "Estimate severity 1 (note), 2 (caution), or 3 (stop now), direction by "
                     "clock position, and distance near (<2m), mid (2-6m), or far (>6m). "
                     "Write each warning in at most 6 words, direction first, as a short imperative. "
                     "Use point [x,y] on a 0-1000 image grid when the hazard can be grounded; "
                     "otherwise point is null. Include a one-sentence scene description and the "
-                    "visible surface. If no hazard is visible, return an empty hazards list. "
-                    "Do not infer a hazard from motion alone.",
+                    "visible surface. Include a hazard only when it is clearly visible and on or "
+                    "immediately beside the hiker's path. If evidence is uncertain or no hazard "
+                    "is visible, return an empty hazards list. Do not infer hazards from motion, "
+                    "scene context, or the absence of a clear path.",
                 ],
             }
         ],
@@ -289,8 +298,8 @@ def _direction_from_point(point: GroundingPoint) -> ClockDirection:
 def _make_speak_events(
     *, window: SessionWindow, hazards: list[ModelHazard], time_s: float
 ) -> list[SpeakEvent]:
-    result: list[SpeakEvent] = []
     distance_rank = {"far": 0, "mid": 1, "near": 2}
+    candidates: list[tuple[int, int, ModelHazard, ClockDirection, tuple[str, str]]] = []
     for hazard in hazards:
         direction = (
             _direction_from_point(hazard.point)
@@ -299,31 +308,36 @@ def _make_speak_events(
         )
         key = (hazard.type.value, direction.value)
         previous = window.last_spoken.get(key)
-        if previous is not None:
-            last_time, last_distance = previous
-            got_closer = distance_rank[hazard.distance.value] > distance_rank[last_distance]
-            if time_s - last_time < SPEECH_REPEAT_SECONDS and not got_closer:
-                continue
+        if previous is not None and time_s - previous[0] < SPEECH_REPEAT_SECONDS:
+            continue
+        candidates.append(
+            (hazard.severity, distance_rank[hazard.distance.value], hazard, direction, key)
+        )
 
-        priority = hazard.severity
-        warning = _align_warning_direction(hazard.say, direction)
-        earcon: Earcon = (
-            Earcon.FORK
-            if hazard.type is HazardType.FORK
-            else {1: Earcon.NOTE, 2: Earcon.CAUTION, 3: Earcon.STOP}[priority]
+    if not candidates:
+        return []
+
+    # Speak only the most urgent candidate. Other detected hazards remain in
+    # the ClipEvent and can be inspected in the event log.
+    _, _, hazard, direction, key = max(candidates, key=lambda item: (item[0], item[1]))
+    priority = hazard.severity
+    warning = _align_warning_direction(hazard.say, direction)
+    earcon: Earcon = (
+        Earcon.FORK
+        if hazard.type is HazardType.FORK
+        else {1: Earcon.NOTE, 2: Earcon.CAUTION, 3: Earcon.STOP}[priority]
+    )
+    haptic: Haptic = {1: Haptic.SHORT, 2: Haptic.DOUBLE, 3: Haptic.LONG}[priority]
+    window.last_spoken[key] = (time_s, hazard.distance.value)
+    return [
+        SpeakEvent(
+            t=time_s,
+            priority=priority,
+            say=warning,
+            earcon=earcon,
+            haptic=haptic,
         )
-        haptic: Haptic = {1: Haptic.SHORT, 2: Haptic.DOUBLE, 3: Haptic.LONG}[priority]
-        result.append(
-            SpeakEvent(
-                t=time_s,
-                priority=priority,
-                say=warning,
-                earcon=earcon,
-                haptic=haptic,
-            )
-        )
-        window.last_spoken[key] = (time_s, hazard.distance.value)
-    return result
+    ]
 
 
 def _align_warning_direction(say: str, direction: ClockDirection) -> str:
@@ -342,14 +356,35 @@ def _align_warning_direction(say: str, direction: ClockDirection) -> str:
 
 
 def _log_model_call(
-    *, session_id: str, latency_ms: int, status: Literal["ok", "error"], error_type: str | None = None
+    *,
+    session_id: str,
+    clip_id: str,
+    sequence: int | None,
+    frame_count: int,
+    window_start_s: float,
+    window_end_s: float,
+    latency_ms: int,
+    status: Literal["ok", "error"],
+    hazards: list[Hazard] | None = None,
+    speak: list[SpeakEvent] | None = None,
+    error_type: str | None = None,
 ) -> None:
+    hazard_data = [hazard.model_dump(mode="json") for hazard in (hazards or [])]
+    speak_data = [item.model_dump(mode="json") for item in (speak or [])]
     record = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
+        "clip_id": clip_id,
+        "sequence": sequence,
         "model": get_model_name(),
+        "reasoning_effort": "low",
+        "frame_count": frame_count,
+        "window_start_s": window_start_s,
+        "window_end_s": window_end_s,
         "latency_ms": latency_ms,
         "status": status,
+        "hazards": hazard_data,
+        "speak": speak_data,
         "error_type": error_type,
     }
     try:
@@ -358,6 +393,15 @@ def _log_model_call(
             log_file.write(json.dumps(record) + "\n")
     except OSError:
         LOGGER.exception("Could not write Perceptron call log")
+    LOGGER.info(
+        "Hazard check: clip=%s sequence=%s status=%s hazards=%d warning=%s latency_ms=%d",
+        clip_id,
+        sequence,
+        status,
+        len(hazard_data),
+        speak_data[0]["say"] if speak_data else "none",
+        latency_ms,
+    )
 
 
 async def analyze_live_clip(
@@ -377,7 +421,10 @@ async def analyze_live_clip(
     if sequence is not None:
         if sequence == 0 or (
             window.last_sequence is not None
-            and sequence != window.last_sequence + 1
+            and (
+                sequence <= window.last_sequence
+                or sequence - window.last_sequence > LIVE_ANALYSIS_STRIDE_SEGMENTS
+            )
         ):
             window.frames.clear()
             window.last_spoken.clear()
@@ -423,6 +470,11 @@ async def analyze_live_clip(
     except Exception as exc:
         _log_model_call(
             session_id=session_id,
+            clip_id=clip_id,
+            sequence=sequence,
+            frame_count=len(frames),
+            window_start_s=start_s,
+            window_end_s=end_s,
             latency_ms=round((perf_counter() - started) * 1000),
             status="error",
             error_type=type(exc).__name__,
@@ -430,7 +482,6 @@ async def analyze_live_clip(
         raise
 
     latency_ms = round((perf_counter() - started) * 1000)
-    _log_model_call(session_id=session_id, latency_ms=latency_ms, status="ok")
     validated_hazards = []
     for hazard in model_output.hazards:
         direction = (
@@ -464,5 +515,17 @@ async def analyze_live_clip(
     window.events = window.events[-MAX_SAVED_EVENTS:]
     _persist_session_events(session_id, window.events)
     speak = _make_speak_events(window=window, hazards=model_output.hazards, time_s=end_s)
+    _log_model_call(
+        session_id=session_id,
+        clip_id=clip_id,
+        sequence=sequence,
+        frame_count=len(frames),
+        window_start_s=start_s,
+        window_end_s=end_s,
+        latency_ms=latency_ms,
+        status="ok",
+        hazards=event.hazards,
+        speak=speak,
+    )
     window.last_used_at = monotonic()
     return ClipResponse(event=event, speak=speak)

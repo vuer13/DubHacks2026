@@ -13,7 +13,6 @@ from pathlib import Path
 from typing import Literal, NoReturn
 from urllib.parse import quote
 
-import cv2
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import Field
 
@@ -33,7 +32,6 @@ from .fall import (
     FALL_WINDOW_SEGMENTS,
     FallAssessment,
     FallSignals,
-    assemble_fall_window,
     assess,
 )
 from .sos import cancel_sos as cancel_sos_for_session
@@ -236,23 +234,16 @@ async def check_for_fall(
                     return FallCheckResponse(fell="unsure", confidence=0.0)
 
                 try:
-                    temp_path = await asyncio.to_thread(
-                        assemble_fall_window, list(window.segments)
-                    )
-                except (cv2.error, OSError, ValueError) as exc:
-                    raise HTTPException(status_code=422, detail=str(exc)) from exc
-                try:
                     assessment = await assess(
-                        temp_path,
+                        "live-fall-window",
                         video_segments=[segment for segment, _ in window.segments],
+                        opencv_segments=list(window.segments),
                     )
                     window.next_assessment_sequence = (
                         sequence + FALL_CHECK_STRIDE_SEGMENTS
                     )
                 except ValueError as exc:
                     raise HTTPException(status_code=400, detail=str(exc)) from exc
-                finally:
-                    temp_path.unlink(missing_ok=True)
         else:
             suffix = Path(clip.filename or "").suffix.lower()
             if not suffix or len(suffix) > 12 or not suffix[1:].isalnum():

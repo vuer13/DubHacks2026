@@ -11,6 +11,7 @@ from . import config as _config
 from .nav.router import router as nav_router
 from .perception.router import router as perception_router
 from .safety.router import router as safety_router
+from .voice.router import router as voice_router
 from .models import HealthResponse
 
 app = FastAPI(title="TrailSense API", version="0.1.0")
@@ -27,6 +28,7 @@ app.add_middleware(
 app.include_router(perception_router)
 app.include_router(safety_router)
 app.include_router(nav_router)
+app.include_router(voice_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])
