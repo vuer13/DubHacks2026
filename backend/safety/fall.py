@@ -61,11 +61,15 @@ TARGET_FPS = 10.0
 FRAME_LONG_EDGE = 320
 BASELINE_SECONDS = 1.0
 END_SECONDS = 1.0
-HIGH_MOTION = 6.0
-LOW_MOTION = 1.5
-VERTICAL_SWEEP_LIMIT = 5.0
-ROTATION_LIMIT_DEG = 20.0
+HIGH_MOTION = 2.0
+LOW_MOTION = 4.0
+VERTICAL_SWEEP_LIMIT = 1.75
+ROTATION_LIMIT_DEG = 7.5
 MIN_ORB_MATCHES = 8
+# A neutral placeholder for the uncalibrated binary OpenCV fallback rule.
+OPENCV_FALL_CONFIDENCE = 0.5
+# Treat model answers below 50% confidence as inconclusive and check motion too.
+VLM_CONFIDENCE_THRESHOLD = 0.50
 FALL_PROMPT = (
     "This is a chest camera on a hiker, with sound. Did the wearer fall to the "
     "ground during this clip? A stumble with recovery is no. Consider both the "
@@ -330,52 +334,68 @@ async def vlm_confirm(clip_path: str | Path) -> tuple[FallLabel, float]:
 
 
 async def assess(clip_path: str | Path) -> FallAssessment:
-    """Run OpenCV feature extraction and ask Mk1.5 to classify every clip."""
-    try:
-        signature = await asyncio.to_thread(motion_signature, clip_path)
-    except (ValueError, cv2.error) as exc:
-        # OpenCV is supplemental: a decode or feature error must not veto Mk1.5.
-        LOGGER.warning("OpenCV fall features unavailable: %s", exc)
-        motion_spike = False
-        static_after = False
-    else:
-        motion_spike = signature["motion_spike"]
-        static_after = signature["static_after"]
-        LOGGER.info(
-            "OpenCV fall features: max_flow=%.3f end_flow=%.3f "
-            "peak_vertical_flow=%.3f rotation_change_deg=%s "
-            "opencv_fall_suspected=%s",
-            signature["max_flow"],
-            signature["end_flow"],
-            signature["peak_vertical_flow"],
-            (
-                f"{signature['rotation_change_deg']:.1f}"
-                if signature["rotation_change_deg"] is not None
-                else "unavailable"
-            ),
-            signature["opencv_fall_suspected"],
-        )
-
+    """Use Mk1.5 first and consult OpenCV when its answer is inconclusive."""
     try:
         vlm_result, confidence = await vlm_confirm(clip_path)
     except Exception:
-        # The app remains usable if the model or network is unavailable.
         vlm_result = "unsure"
         confidence = 0.0
 
-    if vlm_result == "yes":
-        fell: FallLabel = "yes"
-    elif vlm_result == "unsure":
-        fell = "unsure"
-    else:
-        fell = "no"
+    if (
+        vlm_result != "unsure"
+        and confidence >= VLM_CONFIDENCE_THRESHOLD
+    ):
+        return FallAssessment(
+            fell=vlm_result,
+            confidence=confidence,
+            signals=FallSignals(
+                motion_spike=False,
+                static_after=False,
+                vlm=vlm_result,
+            ),
+        )
+
+    try:
+        signature = await asyncio.to_thread(motion_signature, clip_path)
+    except (ValueError, cv2.error) as exc:
+        LOGGER.warning("OpenCV fall fallback unavailable: %s", exc)
+        return FallAssessment(
+            fell="unsure",
+            confidence=0.0,
+            signals=FallSignals(
+                motion_spike=False,
+                static_after=False,
+                vlm=vlm_result,
+            ),
+        )
+
+    LOGGER.info(
+        "OpenCV fall fallback: max_flow=%.3f end_flow=%.3f "
+        "peak_vertical_flow=%.3f rotation_change_deg=%s "
+        "opencv_fall_suspected=%s",
+        signature["max_flow"],
+        signature["end_flow"],
+        signature["peak_vertical_flow"],
+        (
+            f"{signature['rotation_change_deg']:.1f}"
+            if signature["rotation_change_deg"] is not None
+            else "unavailable"
+        ),
+        signature["opencv_fall_suspected"],
+    )
 
     return FallAssessment(
-        fell=fell,
-        confidence=confidence,
+        # OpenCV can add positive fall evidence, but a negative heuristic is
+        # not enough to rule out a fall in a partial sliding window.
+        fell="yes" if signature["opencv_fall_suspected"] else "unsure",
+        confidence=(
+            OPENCV_FALL_CONFIDENCE
+            if signature["opencv_fall_suspected"]
+            else 0.0
+        ),
         signals=FallSignals(
-            motion_spike=motion_spike,
-            static_after=static_after,
+            motion_spike=signature["motion_spike"],
+            static_after=signature["static_after"],
             vlm=vlm_result,
         ),
     )

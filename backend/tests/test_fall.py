@@ -171,18 +171,9 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("enable_audio_in_video", request)
         self.assertEqual(result.fell, "yes")
 
-    async def test_model_classifies_clip_even_without_opencv_motion_cues(self) -> None:
-        signature = {
-            "motion_spike": False,
-            "static_after": False,
-            "max_flow": 0.4,
-            "end_flow": 0.2,
-            "peak_vertical_flow": 0.0,
-            "rotation_change_deg": None,
-            "opencv_fall_suspected": False,
-        }
+    async def test_model_result_skips_opencv(self) -> None:
         with (
-            patch.object(fall, "motion_signature", return_value=signature),
+            patch.object(fall, "motion_signature") as cv_fallback,
             patch.object(
                 fall,
                 "vlm_confirm",
@@ -192,23 +183,15 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await fall.assess("walk.mp4")
 
+        cv_fallback.assert_not_called()
         confirm.assert_awaited_once_with("walk.mp4")
         self.assertEqual(result.fell, "no")
         self.assertEqual(result.confidence, 0.89)
         self.assertEqual(result.signals.vlm, "no")
 
-    async def test_vlm_yes_plus_motion_spike_confirms_fall(self) -> None:
-        signature = {
-            "motion_spike": True,
-            "static_after": False,
-            "max_flow": 8.2,
-            "end_flow": 3.4,
-            "peak_vertical_flow": 3.1,
-            "rotation_change_deg": 12.0,
-            "opencv_fall_suspected": False,
-        }
+    async def test_model_yes_skips_opencv(self) -> None:
         with (
-            patch.object(fall, "motion_signature", return_value=signature),
+            patch.object(fall, "motion_signature") as cv_fallback,
             patch.object(
                 fall,
                 "vlm_confirm",
@@ -218,10 +201,11 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
         ):
             result = await fall.assess("fall.mp4")
 
+        cv_fallback.assert_not_called()
         self.assertEqual(result.fell, "yes")
         self.assertEqual(result.confidence, 0.91)
 
-    async def test_vlm_no_rejects_even_when_both_motion_cues_fire(self) -> None:
+    async def test_vlm_unsure_uses_positive_opencv_fallback(self) -> None:
         signature = {
             "motion_spike": True,
             "static_after": True,
@@ -237,23 +221,25 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
                 fall,
                 "vlm_confirm",
                 new_callable=AsyncMock,
-                return_value=("no", 0.94),
+                return_value=("unsure", 0.52),
             ),
         ):
-            result = await fall.assess("stumble.mp4")
+            result = await fall.assess("unclear.mp4")
 
-        self.assertEqual(result.fell, "no")
-        self.assertEqual(result.confidence, 0.94)
+        self.assertEqual(result.fell, "yes")
+        self.assertEqual(result.confidence, fall.OPENCV_FALL_CONFIDENCE)
+        self.assertTrue(result.signals.motion_spike)
+        self.assertEqual(result.signals.vlm, "unsure")
 
-    async def test_one_motion_signal_and_uncertain_vlm_stays_unsure(self) -> None:
+    async def test_model_failure_uses_opencv_fallback(self) -> None:
         signature = {
             "motion_spike": True,
-            "static_after": False,
-            "max_flow": 8.2,
-            "end_flow": 3.4,
-            "peak_vertical_flow": 0.0,
+            "static_after": True,
+            "max_flow": 8.44,
+            "end_flow": 0.28,
+            "peak_vertical_flow": 0.28,
             "rotation_change_deg": None,
-            "opencv_fall_suspected": False,
+            "opencv_fall_suspected": True,
         }
         with (
             patch.object(fall, "motion_signature", return_value=signature),
@@ -261,22 +247,23 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
                 fall,
                 "vlm_confirm",
                 new_callable=AsyncMock,
-                return_value=("unsure", 0.52),
+                side_effect=RuntimeError("API unavailable"),
             ),
         ):
-            result = await fall.assess("unclear.mp4")
+            result = await fall.assess("fall.mp4")
 
-        self.assertEqual(result.fell, "unsure")
+        self.assertEqual(result.fell, "yes")
+        self.assertEqual(result.confidence, fall.OPENCV_FALL_CONFIDENCE)
         self.assertEqual(result.signals.vlm, "unsure")
 
-    async def test_model_failure_degrades_to_unsure(self) -> None:
+    async def test_model_failure_without_opencv_cues_stays_unsure(self) -> None:
         signature = {
-            "motion_spike": True,
-            "static_after": False,
-            "max_flow": 8.2,
-            "end_flow": 3.4,
-            "peak_vertical_flow": 0.0,
-            "rotation_change_deg": None,
+            "motion_spike": False,
+            "static_after": True,
+            "max_flow": 2.4,
+            "end_flow": 0.3,
+            "peak_vertical_flow": 0.4,
+            "rotation_change_deg": 1.2,
             "opencv_fall_suspected": False,
         }
         with (
@@ -288,26 +275,25 @@ class FallAssessmentTests(unittest.IsolatedAsyncioTestCase):
                 side_effect=RuntimeError("API unavailable"),
             ),
         ):
-            result = await fall.assess("unclear.mp4")
+            result = await fall.assess("walk.mp4")
 
         self.assertEqual(result.fell, "unsure")
         self.assertEqual(result.confidence, 0.0)
-        self.assertEqual(result.signals.vlm, "unsure")
 
-    async def test_opencv_feature_error_does_not_block_model(self) -> None:
+    async def test_model_failure_and_opencv_failure_stays_unsure(self) -> None:
         with (
             patch.object(fall, "motion_signature", side_effect=ValueError("bad codec")),
             patch.object(
                 fall,
                 "vlm_confirm",
                 new_callable=AsyncMock,
-                return_value=("yes", 0.93),
-            ) as confirm,
+                side_effect=RuntimeError("API unavailable"),
+            ),
         ):
-            result = await fall.assess("fall.mov")
+            result = await fall.assess("unknown.mp4")
 
-        confirm.assert_awaited_once_with("fall.mov")
-        self.assertEqual(result.fell, "yes")
+        self.assertEqual(result.fell, "unsure")
+        self.assertEqual(result.confidence, 0.0)
         self.assertFalse(result.signals.motion_spike)
 
 
