@@ -1,4 +1,3 @@
-import { useRouter } from "expo-router";
 import { CameraView, useCameraPermissions, useMicrophonePermissions } from "expo-camera";
 import { File } from "expo-file-system";
 import { useKeepAwake } from "expo-keep-awake";
@@ -32,7 +31,6 @@ const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
 
 export default function HikerScreen() {
-  const router = useRouter();
   const cameraRef = useRef<CameraView>(null);
   const processingRef = useRef(false);
   const pendingClipsRef = useRef<PendingClip[]>([]);
@@ -46,7 +44,7 @@ export default function HikerScreen() {
   const [sessionId] = useState(createSessionId);
   const [live, setLive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
-  const [fallOnlyMode, setFallOnlyMode] = useState(true);
+  const [fallOnlyMode] = useState(true);
   const [lowVision, setLowVision] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [events, setEvents] = useState<ClipEvent[]>([]);
@@ -424,14 +422,6 @@ export default function HikerScreen() {
 
           <View style={styles.controlsCard}>
             <ControlRow label="Low-vision display" value={lowVision} onChange={setLowVision} />
-            <View style={styles.divider} />
-            <ControlRow
-              label="Fall-only test mode"
-              value={fallOnlyMode}
-              onChange={setFallOnlyMode}
-              disabled={live}
-              subtitle={fallOnlyMode ? "Fall detection only; no hike needed" : "Analyze falls and trail hazards"}
-            />
             {!fallOnlyMode ? (
               <>
                 <View style={styles.divider} />
@@ -489,13 +479,6 @@ export default function HikerScreen() {
                 />
               </View>
             ) : null}
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: "/share/[session_id]", params: { session_id: sessionId } })}
-              style={styles.shareButton}
-            >
-              <Text style={styles.shareButtonText}>View hike share page</Text>
-            </Pressable>
           </View>
         </ScrollView>
       )}
@@ -631,8 +614,6 @@ const styles = StyleSheet.create({
   fallTestCard: { gap: 10, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
   fallStatus: { color: COLORS.muted, fontSize: 15, lineHeight: 21 },
   fallResult: { color: COLORS.bright, fontSize: 18, fontWeight: "800" },
-  shareButton: { minHeight: 64, alignItems: "center", justifyContent: "center", borderRadius: 14, borderWidth: 1, borderColor: COLORS.bright },
-  shareButtonText: { color: COLORS.bright, fontSize: 16, fontWeight: "700" },
   statusCardSos: { backgroundColor: COLORS.dark },
   sosText: { color: COLORS.warning },
   devCard: { gap: 4, padding: 16, borderRadius: 16, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
