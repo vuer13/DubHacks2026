@@ -167,6 +167,37 @@ export const SafetyEventSchema = z.discriminatedUnion("type", [
   OffTrailEventSchema,
 ]);
 
+// SOS, mirroring SosRequest, SosResponse, SosCancelRequest and
+// SosCancelResponse in backend/models.py (all extra="forbid").
+export const SosRequestSchema = z
+  .object({
+    session_id: z.string().min(1),
+    reason: z.string().min(1),
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    recent_events: z.array(ClipEventSchema),
+  })
+  .strict();
+
+export const SosResponseSchema = z
+  .object({
+    sent: z.boolean(),
+    to: z.string().nullable().optional(),
+  })
+  .strict();
+
+export const SosCancelRequestSchema = z
+  .object({
+    session_id: z.string().min(1),
+  })
+  .strict();
+
+export const SosCancelResponseSchema = z
+  .object({
+    cancelled: z.boolean(),
+  })
+  .strict();
+
 export const HealthResponseSchema = z
   .object({
     ok: z.boolean(),
@@ -188,3 +219,7 @@ export type ClipResponse = z.infer<typeof ClipResponseSchema>;
 export type FallCheckResponse = z.infer<typeof FallCheckResponseSchema>;
 export type SpeakEvent = z.infer<typeof SpeakEventSchema>;
 export type SafetyEvent = z.infer<typeof SafetyEventSchema>;
+export type SosRequest = z.infer<typeof SosRequestSchema>;
+export type SosResponse = z.infer<typeof SosResponseSchema>;
+export type SosCancelRequest = z.infer<typeof SosCancelRequestSchema>;
+export type SosCancelResponse = z.infer<typeof SosCancelResponseSchema>;

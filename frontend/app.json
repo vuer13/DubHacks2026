@@ -15,6 +15,14 @@
           "microphonePermission": "TrailSense uses audio to help assess live fall clips.",
           "recordAudioAndroid": true
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "If you fall and do not answer the check-in, TrailSense sends your location to your emergency contact so they can find you. It is not used for anything else.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
       ]
     ],
     "ios": {
