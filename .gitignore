@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -158,6 +158,20 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+*.env.local
+!.env.example
+
+# Frontend
+node_modules/
+.next/
+out/
+
+# TrailSense local data and raw footage
+footage/
+backend/data/logs/*
+!backend/data/logs/.gitkeep
+backend/data/sessions/*
+!backend/data/sessions/.gitkeep
 
 # Spyder project settings
 .spyderproject
