@@ -60,8 +60,8 @@ function wait(ms: number): Promise<void> {
 
 async function main(): Promise<void> {
   // ------------------------------------------------------------- reducer
-  await check("countdown length is one constant, 20 seconds by default", () => {
-    assert.equal(CHECKIN_SECONDS, 20);
+  await check("countdown length is one constant, 10 seconds by default", () => {
+    assert.equal(CHECKIN_SECONDS, 10);
     const started = apply(initialCheckinState, devFake);
     assert.equal(started.phase, "counting");
     assert.equal(started.countdownSeconds, CHECKIN_SECONDS);

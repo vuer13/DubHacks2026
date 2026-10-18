@@ -7,8 +7,8 @@
  */
 import type { SafetyEvent } from "@/lib/schema";
 
-/** Countdown length (handoff and Step B5: 20 seconds). */
-export const CHECKIN_SECONDS = 20;
+/** Countdown length. The handoff and Step B5 say 20 seconds; shortened to 10 on 2026-10-18. */
+export const CHECKIN_SECONDS = 10;
 /** How long "Cancelled. Help is not being called." stays up (frame S2). */
 export const CANCELLED_DISPLAY_MS = 3000;
 /** Gap between failed SOS attempts. */
