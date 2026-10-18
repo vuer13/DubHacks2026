@@ -118,6 +118,21 @@ body {
   animation: ts-pulse 1.4s ease-out infinite;
 }
 
+/* Analysing dot on the live preview: a slow blink. Static under reduced motion. */
+@keyframes ts-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.ts-blink {
+  animation: ts-blink 1.2s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

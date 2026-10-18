@@ -12,6 +12,11 @@ export type StatusZoneProps = {
   /** Icon for the word row; for tone 3 it sits beside the hero at 64px. */
   glyph?: ReactNode;
   children?: ReactNode;
+  /**
+   * The handoff drops the hero to 40px "when children need room" but gives no
+   * prop for it; the caller decides (frame 8, a long agent reply).
+   */
+  childrenNeedRoom?: boolean;
   ariaLabel?: string;
 };
 
@@ -36,8 +41,8 @@ export function heroUsesMinSize(text: string, tone: StatusTone): boolean {
   return tone !== "plain" && wordCount(text) >= 6;
 }
 
-export function StatusZone({ text, tone, word, glyph, children, ariaLabel }: StatusZoneProps) {
-  const heroSize = heroUsesMinSize(text, tone) ? "text-hero-min" : "text-hero";
+export function StatusZone({ text, tone, word, glyph, children, childrenNeedRoom = false, ariaLabel }: StatusZoneProps) {
+  const heroSize = childrenNeedRoom || heroUsesMinSize(text, tone) ? "text-hero-min" : "text-hero";
   const loud = tone === 3 || tone === "sos";
   const hero = (
     <p
@@ -52,7 +57,7 @@ export function StatusZone({ text, tone, word, glyph, children, ariaLabel }: Sta
   return (
     <section
       aria-label={ariaLabel}
-      className={"flex min-h-0 flex-1 flex-col justify-center gap-6 px-4 py-6 " + toneLook[String(tone)]}
+      className={"flex min-h-0 flex-1 flex-col justify-center gap-5 px-4 py-6 " + toneLook[String(tone)]}
     >
       {word ? (
         <div className="flex items-center gap-3">

@@ -1,42 +1,33 @@
 "use client";
 
-import { type ChangeEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 
-import { EventLogPanel } from "@/components/ui/EventLogPanel";
-import type { EventRowProps } from "@/components/ui/EventRow";
-import { HealthDot, type HealthStatus } from "@/components/ui/HealthDot";
-import { MicButton } from "@/components/ui/MicButton";
-import { PillToggle } from "@/components/ui/PillToggle";
-import { PrimaryButton } from "@/components/ui/PrimaryButton";
-import { SecondaryButton } from "@/components/ui/SecondaryButton";
-import { StatusZone } from "@/components/ui/StatusZone";
+import { HikerScreen } from "@/components/hiker/HikerScreen";
 import { checkBackendHealth } from "@/lib/api";
+import { getSessionId } from "@/lib/session";
+import { hikerReducer, initialHikerState, selectHikerView } from "@/lib/ui/state";
 
 const HEALTH_POLL_MS = 5000;
-
-const healthLabels: Record<HealthStatus, string> = {
-  ok: "Backend connected",
-  fail: "Backend offline",
-  off: "Checking backend",
-};
 
 // Later app-and-voice steps wire these; for now they render and do nothing.
 function notWiredYet() {}
 
 export default function HomePage() {
-  const [health, setHealth] = useState<HealthStatus>("off");
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [videoName, setVideoName] = useState<string | null>(null);
-  const [logExpanded, setLogExpanded] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const events: EventRowProps[] = [];
+  const [state, dispatch] = useReducer(hikerReducer, initialHikerState);
+  const [sessionId, setSessionId] = useState<string | undefined>(undefined);
+  const [video, setVideo] = useState<{ url: string; name: string } | undefined>(undefined);
+  // Hike time used for the 8 s clear timeout: video time in replay, seconds since start in live.
+  const [now, setNow] = useState(0);
+
+  // Session id on page load, kept in sessionStorage (Step B3).
+  useEffect(() => setSessionId(getSessionId()), []);
 
   // Poll GET /health every 5 seconds through lib/api.ts.
   useEffect(() => {
     let active = true;
     const poll = async () => {
       const online = await checkBackendHealth();
-      if (active) setHealth(online ? "ok" : "fail");
+      if (active) dispatch({ type: "health_changed", health: online ? "ok" : "down" });
     };
     void poll();
     const timer = window.setInterval(() => void poll(), HEALTH_POLL_MS);
@@ -46,69 +37,44 @@ export default function HomePage() {
     };
   }, []);
 
+  // Live mode has no video clock, so count seconds from when it started.
+  useEffect(() => {
+    if (state.mode !== "live") return;
+    const started = performance.now();
+    setNow(0);
+    const timer = window.setInterval(() => setNow((performance.now() - started) / 1000), 1000);
+    return () => window.clearInterval(timer);
+  }, [state.mode]);
+
   useEffect(
     () => () => {
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
+      if (video) URL.revokeObjectURL(video.url);
     },
-    [videoUrl],
+    [video],
   );
 
-  function handleVideoChange(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0] ?? null;
-    if (videoUrl) URL.revokeObjectURL(videoUrl);
-    setVideoName(file?.name ?? null);
-    setVideoUrl(file ? URL.createObjectURL(file) : null);
-    event.target.value = "";
-  }
+  const view = useMemo(() => selectHikerView(state, now), [state, now]);
 
   return (
-    <main className="flex min-h-dvh flex-col overflow-x-hidden bg-ts-bg text-ts-text">
-      <header className="flex h-[52px] shrink-0 items-center justify-between px-4 pt-2">
-        <span className="text-secondary font-semibold leading-[26px] text-ts-text-muted">TrailSense</span>
-        <HealthDot status={health} label={healthLabels[health]} standalone />
-      </header>
-
-      <section aria-label="Trail video" className="aspect-video w-full shrink-0 bg-ts-surface">
-        {videoUrl ? (
-          <video
-            className="h-full w-full bg-black object-contain"
-            src={videoUrl}
-            controls
-            playsInline
-            aria-label={videoName ? "Trail video, " + videoName : "Trail video"}
-          />
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
-            <div className="flex w-[280px] max-w-full flex-col gap-3">
-              <PrimaryButton label="Use demo hike" ariaLabel="Use the demo hike" onPress={notWiredYet} />
-              <SecondaryButton
-                label="Load video"
-                ariaLabel="Load a video from this phone"
-                onPress={() => fileInput.current?.click()}
-              />
-            </div>
-          </div>
-        )}
-        <input ref={fileInput} type="file" accept="video/*" hidden onChange={handleVideoChange} />
-      </section>
-
-      <EventLogPanel
-        events={events}
-        expanded={logExpanded}
-        newCount={0}
-        onToggle={() => setLogExpanded((open) => !open)}
-      />
-
-      {/* Stays mounted while the log is open so its live region keeps announcing. */}
-      <div className={logExpanded ? "sr-only" : "flex min-h-0 flex-1 flex-col"}>
-        <StatusZone text="Ready. Tap the mic to talk." tone="plain" />
-      </div>
-
-      <footer className="flex h-36 shrink-0 items-center justify-between gap-2 border-t-2 border-ts-divider px-4 pb-6 pt-2">
-        <PillToggle label="Live" checked={false} onChange={notWiredYet} />
-        <MicButton state="idle" onPress={notWiredYet} />
-        <PillToggle label="Low vision" checked={false} onChange={notWiredYet} />
-      </footer>
-    </main>
+    <HikerScreen
+      state={state}
+      view={view}
+      {...(sessionId ? { sessionId } : {})}
+      {...(video ? { videoUrl: video.url, videoName: video.name } : {})}
+      handlers={{
+        onUseDemo: notWiredYet,
+        onVideoSelected: (file) => {
+          if (video) URL.revokeObjectURL(video.url);
+          setVideo({ url: URL.createObjectURL(file), name: file.name });
+          setNow(0);
+          dispatch({ type: "video_loaded" });
+        },
+        onTimeUpdate: setNow,
+        onToggleLog: () => dispatch({ type: "log_toggled" }),
+        onMicPress: notWiredYet,
+        onLiveChange: (on) => dispatch({ type: "mode_changed", mode: on ? "live" : video ? "replay" : "idle" }),
+        onLowVisionChange: (on) => dispatch({ type: "low_vision_toggled", on }),
+      }}
+    />
   );
 }
