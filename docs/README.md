@@ -11,5 +11,6 @@ Project docs for TrailSense.
 | [app-and-voice.md](./app-and-voice.md) | App and voice: Next.js, ElevenLabs text to speech and Agent, replay |
 | [safety-and-nav.md](./safety-and-nav.md) | Safety and nav: GPS, fall, SOS, footage |
 | [integration-and-demo.md](./integration-and-demo.md) | Syncs, full-run checklist, demo script |
+| [Design](./design/README.md) | UI design handoff: tokens, components, state frames, glyphs |
 
 `SCHEMA.md` at the repo root is a short copy of the contract. Edit `docs/shared-context.md` first, then sync agent context files if you use them.
