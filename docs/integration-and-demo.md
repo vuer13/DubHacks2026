@@ -23,7 +23,7 @@ Run in this order. Everyone at one table, backend logs on one screen, the phone 
 3. "Use demo hike", play. Watch for: earcons before speech, priority 3 interrupting the agent mid-sentence, no repeated warnings, the sign readout after "Fork ahead", event log filling. Then turn on airplane mode and replay 30 seconds: warnings must still play.
 4. Mid-hike, ask by voice: "what's ahead?", "describe what you see", "read the sign", "where am I?". Each should answer in two sentences or fewer.
 5. Open the share page on a laptop; confirm the pin moves if you walk the phone around the room with geolocation on.
-6. Play `stumble.mp4`: nothing should fire. Play `fall.mp4`: after two consecutive positive fall windows, the check-in starts and countdown shows. Stay silent; SMS arrives and the share page shows the red banner. Replay `fall.mp4` and this time say "I'm fine" during the countdown: it cancels.
+6. Play `stumble.mp4`: nothing should fire. Play `fall.mp4`: after two consecutive positive fall windows, the check-in starts and countdown shows. Stay silent; the emergency contact receives a call with the reason and location, and the share page shows the red banner. Replay `fall.mp4` and this time say "I'm fine" during the countdown: it cancels.
 7. Write down every failure in `demo/ISSUES.md` with an owner. Fix the top five before moving on. Anything else is cut or stubbed.
 
 Exit criteria: steps 2 to 6 work end to end at least once without a manual intervention. If they do not, drop live mode (Step B5) and spend more time here instead.
@@ -43,7 +43,7 @@ Three full runs of the demo script below, each timed. Between runs, only tune co
 | 1:15 | App/Voice | Drop-off moment: stop earcon, "Drop-off, left, stop", long vibration, cuts off any speech. |
 | 1:40 | App/Voice | Ask "describe what you see". The agent reads the scene. |
 | 2:00 | Safety/Nav | Switch to stumble clip: show nothing fires. Say why: three signals, two required. |
-| 2:20 | Safety/Nav | Fall clip: check-in starts, countdown, silence, SMS lands on the second phone, share page goes red. |
+| 2:20 | Safety/Nav | Fall clip: check-in starts, countdown, silence, emergency contact receives the Twilio voice call, share page goes red. |
 | 2:50 | Safety/Nav | Replay, answer "I'm fine", it cancels. |
 | 3:05 | Perception | What is real vs stubbed, latency numbers, cost per hour of hiking from the Mk1.5 logs, how the point grounding fixes direction, and the community hazard map vision. |
 | 3:30 | all | Questions. |

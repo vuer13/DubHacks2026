@@ -4,7 +4,7 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and escalates to an SMS if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Every 3 seconds, a running window of the last few seconds of frames goes to Perceptron Mk1.5, which returns hazards as structured JSON. A smoothing layer decides what is worth saying. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
 
 The primary demo is a recorded trail video replayed with pre-computed events and pre-rendered speech. Live camera mode exists but is secondary.
 

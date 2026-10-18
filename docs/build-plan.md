@@ -26,7 +26,7 @@ Working name: **TrailSense**. Rename freely.
 | Voice: conversation | ElevenLabs Agent, `@elevenlabs/react`, WebSocket with a server-minted signed URL, client tools | Speech in and out, turn-taking and interruption handled by the platform, tools run in the browser against our backend |
 | Fall detection | numpy + OpenCV frame differencing, Mk1.5 confirmation with audio enabled, agent voice check-in | No training needed |
 | Location | Browser Geolocation API, gpxpy on the backend | Off-trail drift from a GPX file |
-| SOS | Twilio SMS | One API call |
+| SOS | Twilio Voice call with spoken alert | One API call |
 | Video tooling | ffmpeg | Clip slicing, frame extraction |
 | Storage | JSON files on disk, in-memory dicts | Keep persistence simple; no database required |
 | Tunnel | ngrok (backend) + Vercel or ngrok (frontend) | Phone must reach the backend over HTTPS for camera and mic permissions |
