@@ -22,8 +22,11 @@ Backend, from the repository root:
     source .venv/bin/activate
     python -m pip install --upgrade pip
     python -m pip install -r backend/requirements.txt
-    cp backend/.env.example backend/.env
+    cp backend/.env.example .env
     uvicorn backend.main:app --reload --port 8000
+
+Keep backend keys in the repository-root `.env` file. The backend loads only
+that file for local settings.
 
 Frontend, in another terminal:
 

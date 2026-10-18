@@ -10,7 +10,7 @@ Before you start: read [`shared-context.md`](./shared-context.md) (or point your
 
 No agent needed. Do these by hand:
 
-1. Create accounts and get keys: Perceptron (for Perception; key at perceptron.inc, try the playground while you are there), ElevenLabs (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can text it). Put keys in `backend/.env` and `frontend/.env.local` and share them with the team over a private channel, never in git.
+1. Create accounts and get keys: Perceptron (for Perception; key at perceptron.inc, try the playground while you are there), ElevenLabs (for App/Voice), Twilio trial (verify the emergency contact's phone number in Twilio so the trial can text it). Put backend keys in the repository-root `.env`, frontend keys in `frontend/.env.local`, and share them with the team over a private channel, never in git.
 2. Go record footage. Phone at chest height, landscape, 1080p 30 fps. Record these as separate clips, 60 to 90 s each, on the nearest trail with some variety (a park with stairs and a creek works if a real trail is far):
    - `clear.mp4`: easy clear trail, steady walking
    - `roots.mp4`: roots, steps, uneven ground
