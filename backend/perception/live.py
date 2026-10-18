@@ -42,6 +42,8 @@ from .signs import SIGN_PROMPT, normalize_sign
 WINDOW_SECONDS = 6.0
 LIVE_SEGMENT_SECONDS = 1.0
 LIVE_ANALYSIS_STRIDE_SEGMENTS = 3
+LIVE_HAZARD_REASONING_EFFORT = "minimal"
+MAX_HAZARD_COMPLETION_TOKENS = 512
 FRAME_INTERVAL_SECONDS = 0.5
 FRAME_LONG_EDGE = 480
 MAX_SESSION_COUNT = 64
@@ -276,7 +278,8 @@ def _request_clip_analysis(frames: list[TimedFrame]) -> ModelClipOutput:
                 "schema": ModelClipOutput.model_json_schema(),
             },
         },
-        reasoning_effort="low",
+        reasoning_effort=LIVE_HAZARD_REASONING_EFFORT,
+        max_completion_tokens=MAX_HAZARD_COMPLETION_TOKENS,
     )
     choice = response.choices[0]
     if choice.finish_reason != "stop":
@@ -382,7 +385,7 @@ def _log_model_call(
         "clip_id": clip_id,
         "sequence": sequence,
         "model": get_model_name(),
-        "reasoning_effort": "low",
+        "reasoning_effort": LIVE_HAZARD_REASONING_EFFORT,
         "frame_count": frame_count,
         "window_start_s": window_start_s,
         "window_end_s": window_end_s,

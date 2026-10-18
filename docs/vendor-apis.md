@@ -17,8 +17,8 @@ Facts gathered 2026-10-17 from the Perceptron workshop (DubHacks), the Mk1.5 lau
 
 | Parameter | Values | Our use |
 |---|---|---|
-| `reasoning_effort` | `high` (default, slowest), `medium`, `low`, `minimal`, `none` | `low` or `minimal` for running-window hazard calls, `medium` for fall confirmation, `high` for describe and OCR. Replaces Mk1's `vision_config.enable_thinking` |
-| `max_completion_tokens` | int, max 8,192 | 512 for hazard JSON, 2048 for describe and OCR, 4096 for tracking |
+| `reasoning_effort` | `high` (default, slowest), `medium`, `low`, `minimal`, `none` | `minimal` for live hazards, `low` for fall calls, `high` for describe and OCR. Replaces Mk1's `vision_config.enable_thinking` |
+| `max_completion_tokens` | int, max 8,192 | 512 for live hazard JSON and offline hazard JSON, 256 for fall JSON, 2048 for describe and OCR, 4096 for tracking |
 | `response_format` | `{"type":"json_schema","json_schema":{"name":..., "strict": true, "schema": {...}}}` | Hazard JSON, sign JSON, fall JSON. Build the schema with pydantic `model_json_schema()` and validate with `model_validate_json(..., strict=True)` |
 | `regex` | top-level string, e.g. `"yes|no"` | Severity 3 confirmation |
 | `vision_config.annotation_format` | `point`, `box`, `polygon`, `clip` | Grounding pass, tracking, clip events |

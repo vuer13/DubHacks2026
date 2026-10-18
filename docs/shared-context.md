@@ -159,12 +159,12 @@ Model `perceptron-mk1.5` on `https://api.perceptron.inc/v1/chat/completions` (`p
 
 | Need | Mk1.5 feature | Request shape |
 |---|---|---|
-| Hazard JSON every 3 s in live mode, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
+| Hazard JSON every 3 s in live mode, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, live mode uses `reasoning_effort="minimal"` and `max_completion_tokens=512`; offline clip jobs use `low` |
 | Direction and distance from geometry | Pointing | second request, `vision_config={"annotation_format":"point"}`, only for severity 2 and 3 |
 | Confirm a severity 3 | Regex output | `regex="yes\|no"` |
 | Trail signs, junction posts, warning signs | OCR + structured output | `response_format` json_schema for `SignReading`, `reasoning_effort="high"` |
 | Scene description on demand | Plain text | `reasoning_effort="high"`, two sentences |
-| Fall confirmation | Structured output + audio | json_schema, `reasoning_effort="medium"`, `vision_config={"enable_audio_in_video": true}` so impact or distress sounds count. Sends real video clips, not frames, because audio needs them |
+| Fall confirmation | Structured output + audio | json_schema, `reasoning_effort="low"`, `max_completion_tokens=256`, `vision_config={"enable_audio_in_video": true}` so impact or distress sounds count. Sends real video clips, not frames, because audio needs them |
 | Demo script timestamps and recall check | Clip events | `vision_config={"annotation_format":"clip"}`, offline batch: contact sheets to find candidate segments, then `video_frames` at 1 fps with source timestamps |
 | Low-vision guidance arrow (stretch) | Video tracking | `vision_config={"annotation_format":"box"}`, "track the walkable trail", offline batch of `video_frames` at 2 fps, produces `track.json` |
 

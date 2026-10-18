@@ -80,8 +80,8 @@ FALL_PROMPT = (
     "intentional sitting is not a fall. Look for a sudden downward or rotational "
     "camera movement, an impact, and a low or still final view. Consider any "
     "impact or distress sounds too. A camera pan or shake alone is not enough. "
-    "If no fall can be determined, answer unsure. "
-    "Return only the requested JSON."
+    "If no fall can be determined, answer unsure. Keep the reason to one short "
+    "sentence. Return only the requested JSON."
 )
 MODEL_LOG_PATH = Path(__file__).resolve().parents[1] / "data" / "logs" / "fall_model.jsonl"
 LOGGER = logging.getLogger(__name__)
@@ -332,7 +332,11 @@ def _request_fall_confirmation(
                 "schema": FallConfirmation.model_json_schema(),
             },
         },
-        "reasoning_effort": "medium",
+        # Fall classification is a latency-sensitive live safety signal. Use
+        # low reasoning effort and a short response to keep each rolling-window
+        # call focused on the structured decision.
+        "reasoning_effort": "low",
+        "max_completion_tokens": 256,
     }
     if audio_available:
         request["vision_config"] = {"enable_audio_in_video": True}

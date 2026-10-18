@@ -30,6 +30,17 @@ const HAZARD_CHECK_STRIDE_SEGMENTS = 3;
 const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 
 type PendingClip = { uri: string; generation: number; sequence: number };
+type FallDisplayState = "off" | "warming" | "checking" | "clear" | "uncertain" | "detected" | "error";
+
+const FALL_STATUS_LABELS: Record<FallDisplayState, string> = {
+  off: "Fall monitoring is off.",
+  warming: "Collecting the first few seconds…",
+  checking: "Checking for a fall…",
+  clear: "No fall detected.",
+  uncertain: "Fall check was inconclusive. Monitoring continues.",
+  detected: "Fall detected. Starting a check-in.",
+  error: "Could not complete the latest fall check.",
+};
 
 export default function HikerScreen() {
   const cameraRef = useRef<CameraView>(null);
@@ -48,6 +59,8 @@ export default function HikerScreen() {
   const [live, setLive] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [events, setEvents] = useState<ClipEvent[]>([]);
+  const [fallDisplayState, setFallDisplayState] = useState<FallDisplayState>("off");
+  const [fallLatencyMs, setFallLatencyMs] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const eventsRef = useRef<ClipEvent[]>([]);
   useEffect(() => {
@@ -126,6 +139,9 @@ export default function HikerScreen() {
 
           const fallAssessmentDue =
             current.sequence >= nextFallAssessmentSequenceRef.current;
+          if (fallAssessmentDue && isMonitoring) {
+            setFallDisplayState("checking");
+          }
           const isCurrent = () =>
             monitoringRef.current && current.generation === generationRef.current;
           const hazardAssessmentDue =
@@ -186,8 +202,17 @@ export default function HikerScreen() {
             .then((result) => {
               if (!isCurrent()) return result;
               if (fallAssessmentDue) {
+                const latencyMs = Date.now() - fallRequestStartedAt;
+                setFallLatencyMs(latencyMs);
+                setFallDisplayState(
+                  result.fell === "yes"
+                    ? "detected"
+                    : result.fell === "no"
+                      ? "clear"
+                      : "uncertain",
+                );
                 console.info(
-                  `Fall result: fell=${result.fell} confidence=${result.confidence.toFixed(3)} latency_ms=${Date.now() - fallRequestStartedAt}`,
+                  `Fall result: fell=${result.fell} confidence=${result.confidence.toFixed(3)} latency_ms=${latencyMs}`,
                 );
                 if (current.sequence >= nextFallAssessmentSequenceRef.current) {
                   nextFallAssessmentSequenceRef.current = Math.max(
@@ -207,6 +232,7 @@ export default function HikerScreen() {
             .catch((error: unknown) => {
               if (isCurrent()) {
                 const message = error instanceof Error ? error.message : "Fall check failed";
+                if (fallAssessmentDue) setFallDisplayState("error");
                 setNotice(`Could not check for a fall: ${message}`);
               }
               throw error;
@@ -267,6 +293,7 @@ export default function HikerScreen() {
       cameraRef.current?.stopRecording();
       setLive(false);
       setCameraReady(false);
+      setFallDisplayState("off");
       stopWarningSpeech();
       return;
     }
@@ -284,6 +311,8 @@ export default function HikerScreen() {
       nextFallAssessmentSequenceRef.current = FALL_WINDOW_SEGMENTS - 1;
       nextHazardAssessmentSequenceRef.current = HAZARD_CHECK_STRIDE_SEGMENTS - 1;
       setCameraReady(false);
+      setFallDisplayState("warming");
+      setFallLatencyMs(null);
       setLive(true);
       setNotice(micPermission.granted ? null : "Microphone is off. Fall checks will use video only.");
     } else {
@@ -352,7 +381,23 @@ export default function HikerScreen() {
             </View>
           ) : (
             <View style={styles.safetyCard}>
-              <Text style={styles.eyebrow}>TRAIL HAZARDS AND SIGNS</Text>
+              <Text style={styles.eyebrow}>LIVE SAFETY MONITORING</Text>
+              <Text style={styles.sectionTitle}>Fall status</Text>
+              <Text
+                accessibilityLiveRegion="polite"
+                style={[
+                  styles.fallStatusText,
+                  fallDisplayState === "detected" ? styles.fallStatusAlert : null,
+                ]}
+              >
+                {FALL_STATUS_LABELS[fallDisplayState]}
+              </Text>
+              {fallLatencyMs !== null && live ? (
+                <Text style={styles.rowSubtitle}>
+                  Latest check took {(fallLatencyMs / 1000).toFixed(1)} seconds.
+                </Text>
+              ) : null}
+              <View style={styles.divider} />
               <Text style={styles.sectionTitle}>Recent hazards</Text>
               {recentHazards.length > 0 ? (
                 recentHazards.map((hazard) => (
@@ -495,6 +540,8 @@ const styles = StyleSheet.create({
   actionButtonText: { color: COLORS.text, fontSize: 16, fontWeight: "700", textAlign: "center" },
   pressed: { opacity: 0.78 },
   rowSubtitle: { color: COLORS.muted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  fallStatusText: { color: COLORS.text, fontSize: 16, lineHeight: 23 },
+  fallStatusAlert: { color: COLORS.warning, fontWeight: "800" },
   divider: { height: 1, backgroundColor: COLORS.divider },
   safetyCard: { gap: 10, padding: 18, borderRadius: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.divider },
   hazardRow: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
