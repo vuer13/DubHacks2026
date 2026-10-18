@@ -4,7 +4,7 @@ Shared context for the whole team and any coding agent. Treat the schema and API
 
 ## What we are building
 
-TrailSense helps visually impaired hikers. A phone at chest height streams video. Live mode requests hazard analysis every 2 seconds over a rolling frame window; Perceptron Mk1.5 returns hazards as structured JSON. A smoothing layer speaks only new detected hazards and remains silent when none are found. A fall check runs alongside hazard analysis and interrupts warning speech when a fall is suspected. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
+TrailSense helps visually impaired hikers. A phone at chest height streams video. Live mode requests hazard analysis every 3 seconds over a rolling frame window; Perceptron Mk1.5 returns hazards as structured JSON. Prompts include trip risks and people or animals that could cause a collision, using the existing hazard categories. A smoothing layer speaks only new detected hazards and remains silent when none are found. A fall check runs alongside hazard analysis and interrupts warning speech when a fall is suspected. ElevenLabs speaks short warnings (text to speech) and answers questions like "what's ahead?" (ElevenLabs Agent with client tools). Mk1.5 also reads trail signs with OCR and grounds hazards with points so direction comes from geometry, not guesswork. A safety layer logs GPS, exposes a live share page, detects falls, and places a voice call if the hiker does not respond to a voice check-in.
 
 The hiker uses the TrailSense app: one React Native codebase (Expo SDK 57, Expo Router) that runs on iPhone and Android and also builds the web share page the emergency contact opens in any browser. The ElevenLabs voice agent runs in an Expo development build; everything else also runs in Expo Go.
 
@@ -159,7 +159,7 @@ Model `perceptron-mk1.5` on `https://api.perceptron.inc/v1/chat/completions` (`p
 
 | Need | Mk1.5 feature | Request shape |
 |---|---|---|
-| Hazard JSON every 2 s in live mode, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
+| Hazard JSON every 3 s in live mode, over a running 6 s window | Structured output, frames via `video_frames` | `response_format={"type":"json_schema","json_schema":{"strict":true,...}}`, `reasoning_effort="low"` (benchmark `minimal` vs `low` in Step A1) |
 | Direction and distance from geometry | Pointing | second request, `vision_config={"annotation_format":"point"}`, only for severity 2 and 3 |
 | Confirm a severity 3 | Regex output | `regex="yes\|no"` |
 | Trail signs, junction posts, warning signs | OCR + structured output | `response_format` json_schema for `SignReading`, `reasoning_effort="high"` |
@@ -174,7 +174,7 @@ Guidance from Perceptron: "For passing data to the model, if you're trying to do
 
 | Mode | Where | What we send |
 |---|---|---|
-| Continuous monitoring | Live `/api/clip`, and the offline replay pipeline (it simulates live so replay matches what live would say) | A running window. Live Expo sends one-second segments for hazard analysis every 2 seconds; the backend samples submitted frames at 2 fps, 480p, into a per-session ring buffer. Each request sends up to the last 6 seconds of sampled frames as one `video_frames` asset with real timestamps. The model sees recent context, though live capture cadence and model latency can leave gaps |
+| Continuous monitoring | Live `/api/clip`, and the offline replay pipeline (it simulates live so replay matches what live would say) | A running window. Live Expo sends one-second segments for hazard analysis every 3 seconds; the backend samples submitted frames at 2 fps, 480p, into a per-session ring buffer. Each request sends up to the last 6 seconds of sampled frames as one `video_frames` asset with real timestamps. The model sees recent context, though live capture cadence and model latency can leave gaps |
 | Batching | Whole-video offline jobs: clip-event ground truth, trail tracking, demo-script timestamps | Frames or a contact sheet. `video_frames` at 1 to 2 fps with source-video timestamps when exact times matter, in segments that fit 256 media units and the token budget. A contact sheet is one grid image of thumbnails with the timestamp burned into each tile. It costs one media unit, so use it for a cheap first scan that picks which segments get the frame pass |
 | Single frame | Grounding, sign reading, severity 3 confirmation | The latest frame of the window as one image |
 | Real clip | Fall confirmation | `video()` of the posted chunk, because `enable_audio_in_video` needs a real video asset |

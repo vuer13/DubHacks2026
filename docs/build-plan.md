@@ -8,6 +8,7 @@ Working name: **TrailSense**. Rename freely.
 
 | Date | Change | Why |
 |---|---|---|
+| 2026-10-18 | Broadened hazard prompts to include clear trip risks and collision risks from people or animals; live hazard requests now run every 3 captured seconds, with one concise summary log per check. | Cover more practical trail dangers and reduce request/log volume. |
 | 2026-10-18 | Live Expo monitoring runs hazard checks every two captured seconds alongside fall checks. It speaks only a newly detected hazard, stays silent on clear results, suppresses repeats for 20 s, and lets a positive fall check-in interrupt warning playback. Hazard and fall model results log to the backend JSONL logs and the Expo console. | Keep the live monitor responsive without noisy clear-path speech; retain separate fall safety checks. |
 | 2026-10-18 | Expo is now the active frontend in `frontend/`; the prior Next.js app is preserved in `frontend/legacy-web/`. Live capture records 1 s segments, checks hazards every 2 captured seconds, and sends fall checks independently. | Use Expo Go for native camera iteration and keep the agreed clip API. |
 | 2026-10-17 | Voice moves from xAI Grok Voice to ElevenLabs: text to speech for warnings, ElevenLabs Agent with client tools for questions. | Team decision. Warnings no longer pass through a language model, so they are faster and spoken verbatim. Replay demo uses pre-rendered mp3s and needs no voice network call. |

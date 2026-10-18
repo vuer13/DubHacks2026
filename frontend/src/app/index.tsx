@@ -23,7 +23,7 @@ const CHECKIN_SECONDS = 20;
 const SEGMENT_SECONDS = 1;
 const FALL_WINDOW_SEGMENTS = 4;
 const FALL_CHECK_STRIDE_SEGMENTS = 3;
-const HAZARD_CHECK_STRIDE_SEGMENTS = 2;
+const HAZARD_CHECK_STRIDE_SEGMENTS = 3;
 const MAX_PENDING_CLIPS = FALL_WINDOW_SEGMENTS;
 
 type PendingClip = { uri: string; generation: number; fallOnly: boolean; sequence: number };
@@ -182,11 +182,8 @@ export default function HikerScreen() {
                     setCaptureStatus("Recording and analyzing live segments");
                     const warning = response.speak[0];
                     console.info(
-                      `Hazard result: count=${response.event.hazards.length} latency_ms=${response.event.latency_ms}`,
+                      `Hazard check: count=${response.event.hazards.length} warning=${warning?.say ?? "none"} latency_ms=${response.event.latency_ms}`,
                       response.event.hazards,
-                    );
-                    console.info(
-                      `Hazard decision: source=perceptron warning=${warning?.say ?? "none"}`,
                     );
                     if (warning && !checkinTriggeredRef.current) {
                       void speakWarning(warning.say);
@@ -467,7 +464,7 @@ export default function HikerScreen() {
               <Text style={styles.rowSubtitle}>
                 {fallOnlyMode
                   ? "One-second clips build a rolling 4-second fall window. TrailSense checks it every 3 seconds, retaining 1 second of overlap. Older queued clips are dropped if analysis falls behind. A YES opens the check-in; this test will not place a call."
-                  : "Hazard requests use a 2-second captured-time cadence while falls are checked in overlapping 4-second windows. Model responses may lag. Speech plays only for a new detected hazard; a suspected fall interrupts it and opens the check-in. Older queued clips are dropped if analysis falls behind. This test will not place a call."}
+                  : "Hazard requests run every 3 seconds while falls are checked in overlapping 4-second windows. Model responses may lag. Speech plays only for a new detected hazard; a suspected fall interrupts it and opens the check-in. Older queued clips are dropped if analysis falls behind. This test will not place a call."}
               </Text>
               <Text accessibilityLiveRegion="polite" style={styles.fallStatus}>{fallCheckStatus}</Text>
               {fallResult ? (

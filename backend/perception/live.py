@@ -39,7 +39,7 @@ from .mk1 import get_client, get_model_name
 
 WINDOW_SECONDS = 6.0
 LIVE_SEGMENT_SECONDS = 1.0
-LIVE_ANALYSIS_STRIDE_SEGMENTS = 2
+LIVE_ANALYSIS_STRIDE_SEGMENTS = 3
 FRAME_INTERVAL_SECONDS = 0.5
 FRAME_LONG_EDGE = 480
 MAX_SESSION_COUNT = 64
@@ -244,8 +244,14 @@ def _request_clip_analysis(frames: list[TimedFrame]) -> ModelClipOutput:
                     video,
                     "You are analyzing a chest-mounted camera for a visually impaired hiker. "
                     "These timestamped frames show the recent trail. Identify only visible "
-                    "immediate trail hazards from this list: drop_off, steep_descent, water, "
-                    "loose_rock, roots_steps, low_branch, fork, mud_ice, wildlife, people. "
+                    "trail hazards from this list: drop_off, steep_descent, water, loose_rock, "
+                    "roots_steps, low_branch, fork, mud_ice, wildlife, people. Treat exposed "
+                    "roots, steps, holes, uneven ground, and other clear trip risks as roots_steps; "
+                    "loose stones or debris as loose_rock; and overhead obstructions as low_branch. "
+                    "Report a person or animal only when they are in, entering, or immediately "
+                    "beside the walking path and could cause a collision. Also report any other "
+                    "clearly visible danger represented by these categories. Ignore people, animals, "
+                    "and objects safely away from the path. "
                     "Estimate severity 1 (note), 2 (caution), or 3 (stop now), direction by "
                     "clock position, and distance near (<2m), mid (2-6m), or far (>6m). "
                     "Write each warning in at most 6 words, direction first, as a short imperative. "
@@ -388,19 +394,11 @@ def _log_model_call(
     except OSError:
         LOGGER.exception("Could not write Perceptron call log")
     LOGGER.info(
-        "Hazard result: clip=%s sequence=%s status=%s hazards=%s latency_ms=%d",
+        "Hazard check: clip=%s sequence=%s status=%s hazards=%d warning=%s latency_ms=%d",
         clip_id,
         sequence,
         status,
-        [
-            f"{item['type']} severity={item['severity']} direction={item['direction']} "
-            f"distance={item['distance']} say={item['say']!r}"
-            for item in hazard_data
-        ],
-        latency_ms,
-    )
-    LOGGER.info(
-        "Hazard decision: source=perceptron warning=%s latency_ms=%d",
+        len(hazard_data),
         speak_data[0]["say"] if speak_data else "none",
         latency_ms,
     )

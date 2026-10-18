@@ -58,7 +58,7 @@ Run it one of three ways:
   `http://localhost:8081/share/demo`.
 
 The app records repeated 1-second camera clips while monitoring is active. In
-live safety mode, it checks hazards every 2 seconds and checks falls separately
+live safety mode, it checks hazards every 3 seconds and checks falls separately
 using overlapping four-second windows. Fall checks advance by three clips to
 retain one second of overlap. The first result needs four seconds of footage.
 Camera recordings restart between clips, so short gaps are possible. Analysis is
@@ -68,8 +68,8 @@ are dropped when model latency falls behind. One nine-second fall request took
 but latency still needs measuring. Keep the app open in the foreground during
 live monitoring. On a physical phone, the backend URL must use the Mac's Wi-Fi IP.
 
-For live diagnostics, watch the Expo/Metro terminal for `Hazard result`,
-`Hazard decision`, and `Fall result` lines. The backend also writes structured
+For live diagnostics, watch the Expo/Metro terminal for `Hazard check` and
+`Fall result` lines. The backend also writes structured
 Perceptron logs to `backend/data/logs/perception_model.jsonl` and
 `backend/data/logs/fall_model.jsonl`.
 
