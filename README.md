@@ -7,6 +7,9 @@ The app is React Native with Expo (SDK 57) and Expo Router: one codebase for the
 The active app is React Native with Expo Router in `frontend/`. The previous
 Next.js implementation is kept under `frontend/legacy-web/` for reference.
 
+# Demo
+https://vimeo.com/1237034444?fl=ip&fe=ec
+
 ## Prerequisites
 
 - Python 3.11
